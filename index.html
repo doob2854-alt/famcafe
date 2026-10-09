@@ -144,6 +144,7 @@ const QUICK_SEARCHES = ['애견동반 카페', '키즈카페', '유모차 카페
 
 /* ───── 시작 지역 (특별·광역시 + 도별 주요 도시) ───── */
 const REGION_KEY = 'family-cafe-map/region';
+const MAP_PREF_KEY = 'family-cafe-map/map'; // 'naver' | 'basic'
 const METROS = [
   { name: '세종', lat: 36.4875, lng: 127.2817, zoom: 12 },
   { name: '서울', lat: 37.5665, lng: 126.9780, zoom: 12 },
@@ -273,7 +274,19 @@ function makeAdapter(engine, el, { center, zoom, onMapClick }) {
         map.fitBounds(b, { top: 70, right: 40, bottom: 40, left: 40 });
       },
       center() { const c = map.getCenter(); return [c.lat(), c.lng()]; },
-      resize() { try { N.Event.trigger(map, 'resize'); map.autoResize && map.autoResize(); } catch (e) {} },
+      // 네이버 지도는 처음 크기를 기억하므로, 화면 크기가 바뀌면 직접 다시 알려줌
+      resize() {
+        try {
+          if (el.clientWidth && el.clientHeight) map.setSize(new N.Size(el.clientWidth, el.clientHeight));
+          if (map.autoResize) map.autoResize();
+        } catch (e) {}
+      },
+      // 실제로 지도 그림(타일)이 그려졌는지
+      drawn() {
+        const big = [...el.querySelectorAll('img')].some((i) => i.complete && i.naturalWidth >= 200);
+        const cv = [...el.querySelectorAll('canvas')].some((c) => c.width >= 200);
+        return big || cv;
+      },
       destroy() { try { map.destroy(); } catch (e) {} },
     };
   }
@@ -340,13 +353,17 @@ function MapView({ engine, markers, fitKey, focus, onReady, onMapClick, initialC
     ad.current = a; onReady && onReady(a);
     a.setMarkers(markers);
     if (fitKey && markers.length) a.fit(markers.filter((m) => m.id !== 'me').map((m) => [m.lat, m.lng]));
-    setTimeout(() => a.resize(), 80);
-    // 네이버 지도가 오류 없이 빈 화면으로 남는 경우(인증 문제 등)를 8초 뒤 확인
+    const timers = [80, 400, 1200].map((ms) => setTimeout(() => a.resize(), ms));
+    const onWin = () => a.resize();
+    window.addEventListener('resize', onWin);
+    // 네이버 지도가 오류 없이 빈 화면으로 남는 경우(인증 문제 등)를 확인 → 기본 지도로
     const check = engine === 'naver' ? setTimeout(() => {
       const box = el.current;
-      if (box && box.clientHeight > 0 && !box.querySelector('img')) reportMapFail('naver', '네이버 지도 화면을 받지 못했어요. 네이버 클라우드의 Web 서비스 URL과 Dynamic Map 선택을 확인해 주세요');
-    }, 8000) : null;
-    return () => { clearTimeout(check); a.destroy(); ad.current = null; };
+      if (box && box.clientHeight > 0 && a.drawn && !a.drawn()) {
+        reportMapFail('naver', '네이버 지도가 그려지지 않았어요 (인증 문제로 보여요)');
+      }
+    }, 7000) : null;
+    return () => { timers.forEach(clearTimeout); clearTimeout(check); window.removeEventListener('resize', onWin); a.destroy(); ad.current = null; };
   }, [engine]);
   useEffect(() => { ad.current && ad.current.setMarkers(markers); }, [markers]);
   useEffect(() => {
@@ -544,8 +561,15 @@ function DetailSheet({ cafe, onClose, onDelete, onEdit }) {
 
 /* ───────────────────────── 기록 추가/수정 폼 ───────────────────────── */
 // 가게 이름 + 지역으로 네이버 사진 검색어 만들기 ("비숑하우스" + "세종특별자치시 …" → "비숑하우스 세종")
+// 주소에서 도시 이름 뽑기: "대전광역시 중구" → 대전, "충청남도 공주시" → 공주, "세종특별자치시" → 세종
+const cityOf = (address = '') => {
+  const [a = '', b = ''] = address.split(/\s+/);
+  const isProvince = (/(도|특별자치도)$/.test(a) && !/특별자치시$/.test(a)) || /^(경기|강원|충북|충남|전북|전남|경북|경남|제주)$/.test(a);
+  const raw = isProvince ? b : a;
+  return raw.replace(/(특별자치시|특별자치도|특별시|광역시|시|군)$/, '') || a;
+};
 const photoQueryOf = (name = '', address = '') => {
-  const city = (address.split(/\s+/)[0] || '').replace(/(특별자치시|특별자치도|특별시|광역시|도)$/, '');
+  const city = cityOf(address);
   return (city && !name.includes(city) ? `${name} ${city}` : name).trim();
 };
 
@@ -994,6 +1018,43 @@ function RegionSheet({ current, firstRun, onDone, onClose }) {
   );
 }
 
+/* ───────────────────────── 지도 점검 ───────────────────────── */
+function MapHelpSheet({ engine, note, config, pref, onPref, onClose }) {
+  const host = location.host;
+  const Row = ({ n, children }) => (
+    <li className="flex gap-3"><span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-coral-500 text-[12px] font-extrabold text-white">{n}</span>
+      <span className="text-[14px] leading-relaxed text-ink-700">{children}</span></li>
+  );
+  return (
+    <div className="fixed inset-0 z-[1150] fade-in">
+      <div className="absolute inset-0 bg-ink-900/40" onClick={onClose} />
+      <div className="absolute inset-x-0 bottom-0 mx-auto max-h-[90vh] max-w-md overflow-y-auto rounded-t-[28px] bg-cream p-5 sheet-up pb-safe">
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-lg font-extrabold">지도 점검</h2>
+          <button onClick={onClose} aria-label="닫기" className="h-9 w-9 rounded-full bg-white text-ink-500 ring-1 ring-ink-400/20">✕</button>
+        </div>
+        <div className="mb-4 rounded-2xl bg-white p-4 text-[13px] text-ink-700 ring-1 ring-ink-400/15">
+          <p>지금 지도: <b>{engine === 'naver' ? '네이버 지도' : engine === 'leaflet' ? '기본 지도' : '없음'}</b></p>
+          <p>네이버 지도 키: <b>{config.naverMapKeyId ? `${config.naverMapKeyId.slice(0, 4)}…` : '없음'}</b> · 앱 주소: <b>{host}</b></p>
+          {note && <p className="mt-1 text-coral-700">⚠️ {note}</p>}
+        </div>
+        <h3 className="mb-2 text-[13px] font-bold text-ink-500">네이버 지도가 안 나오면 확인할 것</h3>
+        <ol className="mb-5 space-y-2.5">
+          <Row n="1">네이버 클라우드 콘솔 → <b>Maps → Application</b>에서 이 앱을 열고 <b>Dynamic Map</b>이 체크돼 있는지</Row>
+          <Row n="2">같은 화면의 <b>Web 서비스 URL</b>에 <b>http://{host}</b> 가 정확히 있는지 (끝에 / 없이)</Row>
+          <Row n="3">Vercel의 <b>NAVER_MAP_KEY_ID</b> 값이 <b>Maps</b> Application의 Client ID인지 (API HUB 검색 키와 다른 값이에요)</Row>
+          <Row n="4">고친 뒤 Vercel에서 <b>Redeploy</b> → 앱을 완전히 껐다 켜기</Row>
+        </ol>
+        <div className="grid grid-cols-2 gap-2">
+          <button onClick={() => onPref('naver')} className={`rounded-2xl py-3 text-[14px] font-bold ${pref !== 'basic' ? 'bg-naver-500 text-white' : 'bg-white text-ink-700 ring-1 ring-ink-400/20'}`}>네이버 지도 다시 시도</button>
+          <button onClick={() => onPref('basic')} className={`rounded-2xl py-3 text-[14px] font-bold ${pref === 'basic' ? 'bg-coral-500 text-white' : 'bg-white text-ink-700 ring-1 ring-ink-400/20'}`}>기본 지도로 계속 쓰기</button>
+        </div>
+        <p className="mt-2 text-center text-[11px] text-ink-400">어느 지도를 써도 네이버 검색·사진은 똑같이 동작해요</p>
+      </div>
+    </div>
+  );
+}
+
 /* ───────────────────────── 설치 안내 ───────────────────────── */
 function InstallGuide({ onClose, deferredPrompt, onInstalled }) {
   const ios = isIOS();
@@ -1047,6 +1108,8 @@ function App() {
   const [config, setConfig] = useState({ naverMapKeyId: '', searchEnabled: false });
   const [engine, setEngine] = useState(null); // null(로딩) | 'naver' | 'leaflet' | 'none'
   const [mapNote, setMapNote] = useState(''); // 지도가 네이버가 아닐 때 그 이유
+  const [mapPref] = useState(() => { try { return localStorage.getItem(MAP_PREF_KEY) || 'naver'; } catch (e) { return 'naver'; } });
+  const [showMapHelp, setShowMapHelp] = useState(false);
   const [filters, setFilters] = useState({ pet: false, stroller: false, babyChair: false });
   const [selectedId, setSelectedId] = useState(null);
   const [detailId, setDetailId] = useState(null);
@@ -1095,6 +1158,7 @@ function App() {
         if (eng === 'naver') fallback(why);
         else { setEngine('none'); setMapNote(why); }
       };
+      if (mapPref === 'basic') return fallback('기본 지도로 쓰는 중 (지도 점검에서 바꿀 수 있어요)');
       if (cfg.naverMapKeyId) {
         window.navermap_authFailure = () => fallback('네이버 지도 인증 실패: 네이버 클라우드에 등록한 Web 서비스 URL(famcafe.vercel.app)을 확인해 주세요');
         try {
@@ -1108,6 +1172,34 @@ function App() {
   }, []);
 
   useEffect(() => { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(cafes)); } catch (e) { flash('저장 공간이 부족해요. 사진 용량을 줄여 주세요.'); } }, [cafes]);
+
+  // 예전에 기본 샘플 사진으로 저장된 곳은 네이버 사진으로 한 번 자동 교체
+  useEffect(() => {
+    if (!config.searchEnabled) return;
+    const todo = cafes.filter((c) => c.name && !c.photoThumb && !c.photoTried && (!c.photo || c.photo === SAMPLE_PHOTOS[0].url));
+    if (!todo.length) return;
+    let stop = false;
+    (async () => {
+      let filled = 0;
+      for (const c of todo) {
+        if (stop) break;
+        try {
+          const items = await naverImages(photoQueryOf(c.name, c.address));
+          const it = items[0];
+          setCafes((prev) => prev.map((x) => (x.id === c.id
+            ? { ...x, photoTried: true, ...(it ? { photo: it.url || it.thumb, photoThumb: it.thumb || '' } : {}) } : x)));
+          if (it) filled++;
+        } catch (e) {
+          // 권한/설정 문제면 멈추고 알려줌 (설정 후 다음 실행 때 다시 시도)
+          flash(`📷 사진 자동 채우기 실패: ${e.message}`, 6000);
+          break;
+        }
+        await new Promise((r) => setTimeout(r, 250));
+      }
+      if (filled) flash(`📷 ${filled}곳에 네이버 사진을 넣었어요`);
+    })();
+    return () => { stop = true; };
+  }, [config.searchEnabled]);
 
   // 설치 프롬프트(안드로이드/크롬) + 첫 방문 안내
   useEffect(() => {
@@ -1326,10 +1418,14 @@ function App() {
           </div>
         )}
         {engine === 'leaflet' && mapOpen && (
-          <button onClick={() => mapNote && flash(mapNote, 5000)}
+          <button onClick={() => setShowMapHelp(true)}
             className="absolute bottom-7 left-2 z-[500] max-w-[75%] truncate rounded-full bg-white/90 px-2 py-0.5 text-left text-[10px] font-semibold text-ink-500 shadow">
-            기본 지도{mapNote ? ` · ${mapNote}` : ' · 네이버 지도 설정 전'}
+            ⓘ 기본 지도{mapNote ? ` · ${mapNote}` : ' · 네이버 지도 설정 전'}
           </button>
+        )}
+        {engine === 'naver' && mapOpen && (
+          <button onClick={() => setShowMapHelp(true)} aria-label="지도 점검"
+            className="absolute bottom-6 right-16 z-[500] grid h-10 w-10 place-items-center rounded-full bg-white text-[15px] font-bold text-ink-400 shadow-card active:scale-95">?</button>
         )}
         {engine === 'none' && mapOpen && (
           <div className="absolute inset-0 z-[500] grid place-items-center p-6 text-center">
@@ -1413,6 +1509,10 @@ function App() {
         <AddCafeSheet engine={engine} center={center} searchEnabled={config.searchEnabled}
           initial={editing.mode === 'new' ? null : editing} prefill={editing.mode === 'new' ? editing.prefill : null}
           onClose={() => setEditing(null)} onSave={save} />
+      )}
+      {showMapHelp && (
+        <MapHelpSheet engine={engine} note={mapNote} config={config} pref={mapPref} onClose={() => setShowMapHelp(false)}
+          onPref={(p) => { try { localStorage.setItem(MAP_PREF_KEY, p); } catch (e) {} location.reload(); }} />
       )}
       {showRegion && (
         <RegionSheet current={regions} firstRun={!regions} onDone={chooseRegions} onClose={() => setShowRegion(false)} />
