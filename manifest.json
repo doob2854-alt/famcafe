@@ -1,20 +1,42 @@
 {
   "id": "/",
-  "name": "우리가족 카페 & 나들이 지도",
-  "short_name": "가족나들이",
-  "description": "아기와 반려견이 함께 가는 카페·나들이 장소를 기록하는 가족 지도",
+  "name": "보풀이갈수있어?",
+  "short_name": "보풀이갈수있어?",
+  "description": "보풀이(비숑)와 아기랑 함께 갈 수 있는 카페·나들이 장소를 기록하는 가족 지도",
   "lang": "ko-KR",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
-  "display_override": ["standalone", "minimal-ui"],
+  "display_override": [
+    "standalone",
+    "minimal-ui"
+  ],
   "orientation": "portrait",
   "background_color": "#FFF8F3",
   "theme_color": "#F97362",
-  "categories": ["lifestyle", "travel", "food"],
+  "categories": [
+    "lifestyle",
+    "travel",
+    "food"
+  ],
   "icons": [
-    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
-    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
-    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
   ]
 }

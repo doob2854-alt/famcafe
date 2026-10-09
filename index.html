@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <!-- 노치/홈 인디케이터 영역까지 꽉 채우고, 확대 방지로 앱처럼 동작 -->
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
-  <title>가족나들이</title>
+  <title>보풀이갈수있어?</title>
   <meta name="description" content="아기와 강아지가 함께 가는 카페·나들이 장소 가족 지도" />
 
   <!-- PWA: 매니페스트 + 테마 색 -->
@@ -15,7 +15,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <meta name="apple-mobile-web-app-title" content="가족나들이" />
+  <meta name="apple-mobile-web-app-title" content="보풀이갈수있어?" />
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
   <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png" />
   <meta name="format-detection" content="telephone=no" />
@@ -1059,11 +1059,11 @@ function FamilySheet({ enabled, family, sync, prefill, onCreate, onJoin, onLeave
     try { await fn(); } catch (e) { setErr(e.message); } finally { setBusy(''); }
   };
   const appUrl = `${location.origin}${location.pathname}`;
-  const shareText = family ? `우리가족 나들이 지도 같이 써요 🐶☕\n\n① 아래 주소를 Safari/Chrome으로 열고 홈 화면에 추가\n② 앱에서 👨‍👩‍👧 가족 공유 → 코드로 함께하기\n가족 코드: ${family.code}\n\n${appUrl}?join=${family.code}` : '';
+  const shareText = family ? `보풀이갈수있어? 같이 써요 🐶☕\n\n① 아래 주소를 Safari/Chrome으로 열고 홈 화면에 추가\n② 앱에서 👨‍👩‍👧 가족 공유 → 코드로 함께하기\n가족 코드: ${family.code}\n\n${appUrl}?join=${family.code}` : '';
   const share = async () => {
     vibrate();
     try {
-      if (navigator.share) await navigator.share({ title: '우리가족 나들이 지도', text: shareText });
+      if (navigator.share) await navigator.share({ title: '보풀이갈수있어?', text: shareText });
       else { await navigator.clipboard.writeText(shareText); alert('초대 문구를 복사했어요. 카톡에 붙여 넣어 보내 주세요.'); }
     } catch (e) {}
   };
@@ -1538,7 +1538,7 @@ function App() {
       <header className="z-20 bg-cream/95 pt-safe backdrop-blur">
         <div className="flex items-center justify-between px-5 pt-3 pb-2">
           <div className="flex items-center gap-2.5">
-            <span className="grid h-11 w-11 place-items-center rounded-2xl bg-coral-100"><Bichon className="h-10 w-10" /></span>
+            <img src="icons/icon-192.png" alt="보풀이" className="h-11 w-11 rounded-2xl object-cover shadow-sm ring-2 ring-white" />
             <div>
               <button onClick={() => setShowRegion(true)}
                 className="-ml-0.5 mb-0.5 inline-flex items-center gap-1 rounded-full bg-white px-2 py-0.5 text-[12px] font-bold text-coral-600 ring-1 ring-coral-100 active:scale-95">
@@ -1548,7 +1548,7 @@ function App() {
                 className={`mb-0.5 ml-1 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[12px] font-bold ring-1 active:scale-95 ${family ? 'bg-sage-50 text-sage-700 ring-sage-100' : 'bg-white text-ink-500 ring-ink-400/20'}`}>
                 👨‍👩‍👧 {family ? (sync.state === 'syncing' ? '맞추는 중' : sync.state === 'error' ? '공유 ⚠️' : '공유 중') : '가족 공유'}
               </button>
-              <h1 className="text-[20px] font-extrabold leading-tight tracking-tight text-ink-900">우리가족 나들이 지도</h1>
+              <h1 className="text-[20px] font-extrabold leading-tight tracking-tight text-ink-900">보풀이갈수있어?</h1>
             </div>
           </div>
           {!standalone && (
