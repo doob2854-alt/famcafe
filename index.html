@@ -137,27 +137,44 @@ const SAMPLE_PHOTOS = [
   { label: '커피 한 잔',  url: 'https://images.unsplash.com/photo-1442512595331-e89e73853f31?w=800&q=70&auto=format&fit=crop' },
 ];
 
-// 처음 실행 시 보여 줄 예시 기록 (가상의 카페 — 지워도 됩니다)
-const SEED = [
-  { id: 's1', sample: true, name: '숲속 정원 베이커리', address: '서울 성동구 서울숲 인근', date: '2026-09-27', rating: 5,
-    photo: SAMPLE_PHOTOS[4].url, memo: '잔디 마당이 넓어서 강아지가 신나게 뛰어놀았어요',
-    review: '야외 테라스 전체 반려견 동반 가능. 기저귀 교환대 있는 화장실, 아기 의자 3개. 주말 오전 11시 전에 가면 한산해요.',
-    tags: { babyChair: true, stroller: true, pet: true }, lat: 37.5444, lng: 127.0374 },
-  { id: 's2', sample: true, name: '한옥 라떼 하우스', address: '서울 종로구 북촌로', date: '2026-09-14', rating: 4,
-    photo: SAMPLE_PHOTOS[1].url, memo: '분위기 최고, 단 입구에 계단 두 칸',
-    review: '유모차는 접어서 들어가야 함. 좌식 자리가 있어서 아기가 기어다니기 좋았음.',
-    tags: { babyChair: true, stroller: false, pet: false }, lat: 37.5826, lng: 126.9849 },
-  { id: 's3', sample: true, name: '한강뷰 브런치 카페', address: '서울 마포구 망원한강공원 근처', date: '2026-08-30', rating: 4,
-    photo: SAMPLE_PHOTOS[0].url, memo: '엘리베이터 있고 통로 넓어요. 산책 후 들르기 딱',
-    review: '반려견은 1층 테라스만 가능. 브런치 양 많음, 아기 이유식 데워 주심.',
-    tags: { babyChair: true, stroller: true, pet: true }, lat: 37.5559, lng: 126.8954 },
-];
-
 const QUICK_SEARCHES = ['애견동반 카페', '키즈카페', '유모차 카페', '베이커리 카페'];
 
+/* ───── 시작 지역 (특별·광역시 + 도별 주요 도시) ───── */
+const REGION_KEY = 'family-cafe-map/region';
+const METROS = [
+  { name: '세종', lat: 36.4875, lng: 127.2817, zoom: 12 },
+  { name: '서울', lat: 37.5665, lng: 126.9780, zoom: 12 },
+  { name: '부산', lat: 35.1796, lng: 129.0756, zoom: 12 },
+  { name: '대구', lat: 35.8714, lng: 128.6014, zoom: 12 },
+  { name: '인천', lat: 37.4563, lng: 126.7052, zoom: 12 },
+  { name: '광주', lat: 35.1595, lng: 126.8526, zoom: 12 },
+  { name: '대전', lat: 36.3504, lng: 127.3845, zoom: 12 },
+  { name: '울산', lat: 35.5384, lng: 129.3114, zoom: 12 },
+];
+const PROVINCES = [
+  { name: '경기', cities: [['수원', 37.2636, 127.0286], ['성남', 37.4200, 127.1267], ['용인', 37.2411, 127.1776], ['고양', 37.6584, 126.8320],
+    ['화성(동탄)', 37.2006, 127.0735], ['부천', 37.5034, 126.7660], ['안양', 37.3943, 126.9568], ['남양주', 37.6360, 127.2165],
+    ['김포', 37.6152, 126.7156], ['파주', 37.7600, 126.7800], ['하남', 37.5393, 127.2148], ['평택', 36.9921, 127.1129]] },
+  { name: '강원', cities: [['춘천', 37.8813, 127.7298], ['원주', 37.3422, 127.9202], ['강릉', 37.7519, 128.8761], ['속초', 38.2070, 128.5918]] },
+  { name: '충북', cities: [['청주', 36.6424, 127.4890], ['충주', 36.9910, 127.9259], ['제천', 37.1326, 128.1910]] },
+  { name: '충남', cities: [['천안', 36.8151, 127.1139], ['아산', 36.7898, 127.0019], ['공주', 36.4465, 127.1190], ['당진', 36.8898, 126.6459], ['서산', 36.7848, 126.4503]] },
+  { name: '전북', cities: [['전주', 35.8242, 127.1480], ['군산', 35.9676, 126.7366], ['익산', 35.9483, 126.9577]] },
+  { name: '전남', cities: [['여수', 34.7604, 127.6622], ['순천', 34.9506, 127.4872], ['목포', 34.8118, 126.3922], ['광양', 34.9407, 127.6959]] },
+  { name: '경북', cities: [['포항', 36.0190, 129.3435], ['구미', 36.1195, 128.3446], ['경주', 35.8562, 129.2247], ['안동', 36.5684, 128.7294]] },
+  { name: '경남', cities: [['창원', 35.2280, 128.6811], ['김해', 35.2285, 128.8894], ['진주', 35.1800, 128.1076], ['양산', 35.3350, 129.0373], ['거제', 34.8806, 128.6211]] },
+  { name: '제주', cities: [['제주시', 33.4996, 126.5312], ['서귀포', 33.2541, 126.5600]] },
+];
+// 검색어에 붙일 지역 이름 ("화성(동탄)" → "동탄", "제주시" → "제주시")
+const searchNameOf = (r) => (r ? (r.searchName || r.name.replace(/^.*\((.+)\)$/, '$1')) : '');
+const loadRegion = () => { try { return JSON.parse(localStorage.getItem(REGION_KEY) || 'null'); } catch (e) { return null; } };
+
 const loadCafes = () => {
-  try { const raw = localStorage.getItem(STORAGE_KEY); if (raw) return JSON.parse(raw); } catch (e) {}
-  return SEED;
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    // 예전 버전의 가상 예시 카페는 정리 (직접 수정한 건 유지)
+    if (raw) return JSON.parse(raw).filter((c) => !c.sample);
+  } catch (e) {}
+  return [];
 };
 const todayStr = () => { const d = new Date(); return new Date(d - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10); };
 const fmtDate = (s) => (s ? s.replace(/-/g, '.') : '');
@@ -747,6 +764,119 @@ function AddCafeSheet({ initial, prefill, engine, center, searchEnabled, onClose
   );
 }
 
+/* ───────────────────────── 시작 지역 선택 ───────────────────────── */
+function RegionSheet({ current, firstRun, onPick, onClose }) {
+  const [filter, setFilter] = useState('');
+  const [openProv, setOpenProv] = useState(null);
+  const [locating, setLocating] = useState(false);
+  const f = filter.trim();
+  const isCur = (name) => current && current.name === name;
+
+  const pickCity = (prov, [name, lat, lng]) => { vibrate(); onPick({ name, province: prov, lat, lng, zoom: 13 }); };
+  const useHere = () => {
+    if (!navigator.geolocation) return alert('이 기기에서는 위치를 쓸 수 없어요.');
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(async (p) => {
+      const lat = p.coords.latitude, lng = p.coords.longitude;
+      const area = await reverseArea(lat, lng);
+      setLocating(false);
+      onPick({ name: area || '내 주변', searchName: area || '', here: true, lat, lng, zoom: 14 });
+    }, () => { setLocating(false); alert('위치 권한을 허용하면 지금 있는 곳에서 시작할 수 있어요.'); },
+    { enableHighAccuracy: true, timeout: 8000 });
+  };
+
+  const cityMatches = f ? PROVINCES.flatMap((p) => p.cities.filter((c) => c[0].includes(f) || p.name.includes(f)).map((c) => [p.name, c])) : [];
+  const metroMatches = f ? METROS.filter((m) => m.name.includes(f)) : METROS;
+  const chip = (active) => `rounded-2xl px-3 py-3 text-[15px] font-bold transition active:scale-95 ${active ? 'bg-coral-500 text-white shadow-md' : 'bg-white text-ink-700 ring-1 ring-ink-400/20'}`;
+
+  return (
+    <div className="fixed inset-0 z-[1150] fade-in">
+      <div className="absolute inset-0 bg-ink-900/40" onClick={firstRun ? undefined : onClose} />
+      <div className={`absolute inset-x-0 bottom-0 mx-auto flex max-w-md flex-col rounded-t-[28px] bg-cream sheet-up ${firstRun ? 'h-[100dvh] rounded-none' : 'max-h-[90dvh]'}`}>
+        <div className={`px-5 pb-3 ${firstRun ? 'pt-[calc(env(safe-area-inset-top)+28px)]' : 'pt-5'}`}>
+          {firstRun ? (
+            <div className="mb-4 flex flex-col items-center text-center">
+              <span className="grid h-20 w-20 place-items-center rounded-[28px] bg-coral-100"><Bichon className="h-16 w-16" /></span>
+              <h2 className="mt-3 text-[22px] font-extrabold text-ink-900">어디서 나들이를 시작할까요?</h2>
+              <p className="mt-1 text-sm text-ink-500">고른 지역에서 지도가 열리고, 네이버 검색도 그 지역 위주로 찾아요.<br />나중에 위쪽 📍 지역 버튼으로 언제든 바꿀 수 있어요.</p>
+            </div>
+          ) : (
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="text-lg font-extrabold text-ink-900">시작 지역 바꾸기</h2>
+              <button onClick={onClose} aria-label="닫기" className="h-9 w-9 rounded-full bg-white text-ink-500 ring-1 ring-ink-400/20">✕</button>
+            </div>
+          )}
+          <button onClick={useHere}
+            className="mb-3 flex w-full items-center justify-center gap-2 rounded-2xl bg-sky2-50 py-3.5 text-[15px] font-bold text-sky2-700 ring-1 ring-sky2-100 active:scale-[.98]">
+            {locating ? <div className="spinner" /> : '◎'} 지금 있는 곳에서 시작하기
+          </button>
+          <input value={filter} onChange={(e) => setFilter(e.target.value)} placeholder="도시 이름으로 찾기 (예: 천안, 동탄)"
+            className="w-full rounded-2xl bg-white px-4 py-3 text-ink-900 outline-none ring-1 ring-ink-400/20 focus:ring-2 focus:ring-coral-400 placeholder:text-ink-400/70" />
+        </div>
+
+        <div className="flex-1 overflow-y-auto no-scrollbar px-5 pb-[calc(env(safe-area-inset-bottom)+24px)]">
+          {metroMatches.length > 0 && (
+            <>
+              <h3 className="mb-2 mt-1 text-[12px] font-bold text-ink-400">특별·광역시</h3>
+              <div className="grid grid-cols-4 gap-2">
+                {metroMatches.map((m) => (
+                  <button key={m.name} onClick={() => { vibrate(); onPick(m); }} className={chip(isCur(m.name))}>{m.name}</button>
+                ))}
+              </div>
+            </>
+          )}
+
+          {f ? (
+            cityMatches.length > 0 && (
+              <>
+                <h3 className="mb-2 mt-5 text-[12px] font-bold text-ink-400">도시</h3>
+                <div className="grid grid-cols-3 gap-2">
+                  {cityMatches.map(([prov, c]) => (
+                    <button key={prov + c[0]} onClick={() => pickCity(prov, c)} className={chip(isCur(c[0]))}>
+                      {c[0]}<span className="block text-[11px] font-semibold opacity-60">{prov}</span>
+                    </button>
+                  ))}
+                </div>
+              </>
+            )
+          ) : (
+            <>
+              <h3 className="mb-2 mt-5 text-[12px] font-bold text-ink-400">도</h3>
+              <div className="space-y-2">
+                {PROVINCES.map((p) => {
+                  const open = openProv === p.name;
+                  const has = current && current.province === p.name;
+                  return (
+                    <div key={p.name} className="rounded-2xl bg-white ring-1 ring-ink-400/15">
+                      <button onClick={() => setOpenProv(open ? null : p.name)} className="flex w-full items-center justify-between px-4 py-3.5">
+                        <span className="text-[15px] font-bold text-ink-900">{p.name}
+                          {has && <span className="ml-2 rounded-full bg-coral-50 px-2 py-0.5 text-[11px] text-coral-600">{current.name}</span>}
+                        </span>
+                        <span className={`text-ink-400 transition ${open ? 'rotate-180' : ''}`}>▾</span>
+                      </button>
+                      {open && (
+                        <div className="grid grid-cols-3 gap-2 px-3 pb-3 fade-in">
+                          {p.cities.map((c) => (
+                            <button key={c[0]} onClick={() => pickCity(p.name, c)}
+                              className={`rounded-xl py-2.5 text-[14px] font-bold active:scale-95 ${isCur(c[0]) ? 'bg-coral-500 text-white' : 'bg-cream text-ink-700'}`}>{c[0]}</button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          )}
+          {f && metroMatches.length === 0 && cityMatches.length === 0 && (
+            <p className="mt-6 text-center text-sm text-ink-500">목록에 없는 곳이면 ‘지금 있는 곳에서 시작하기’를 써 주세요.</p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ───────────────────────── 설치 안내 ───────────────────────── */
 function InstallGuide({ onClose, deferredPrompt, onInstalled }) {
   const ios = isIOS();
@@ -810,7 +940,11 @@ function App() {
   const [standalone, setStandalone] = useState(isStandalone());
   const [focus, setFocus] = useState(null);
   const [me, setMe] = useState(null);
-  const [fitKey, setFitKey] = useState(1);
+  const [fitKey, setFitKey] = useState(0);
+  // 시작 지역
+  const [region, setRegion] = useState(loadRegion);
+  const [showRegion, setShowRegion] = useState(() => !loadRegion());
+  const [scoped, setScoped] = useState(true); // 검색을 시작 지역 안에서
   // 네이버 검색 상태
   const [q, setQ] = useState('');
   const [searchFocused, setSearchFocused] = useState(false);
@@ -897,9 +1031,20 @@ function App() {
     }
   };
 
-  const runSearch = async (query) => {
-    query = (query || '').trim(); if (!query) return;
-    setQ(query); setSearchFocused(false); setActiveRes(null); setSelectedId(null);
+  const regionName = searchNameOf(region);
+  const chooseRegion = (r) => {
+    setRegion(r); setShowRegion(false); setArea(''); setScoped(true);
+    try { localStorage.setItem(REGION_KEY, JSON.stringify(r)); } catch (e) {}
+    setFocus({ lat: r.lat, lng: r.lng, zoom: r.zoom, t: Date.now() });
+    if (!mapOpen) setMapOpen(true);
+    flash(`📍 ${r.name}에서 시작할게요`);
+  };
+
+  const runSearch = async (input) => {
+    input = (input || '').trim(); if (!input) return;
+    // 시작 지역 안에서 찾기: 검색어에 지역 이름이 없으면 앞에 붙임
+    const query = scoped && regionName && !input.includes(regionName) ? `${regionName} ${input}` : input;
+    setQ(input); setSearchFocused(false); setActiveRes(null); setSelectedId(null);
     document.activeElement && document.activeElement.blur && document.activeElement.blur();
     setSearch({ query, loading: true, items: null, error: null });
     try {
@@ -908,7 +1053,10 @@ function App() {
       setFitKey((k) => k + 1); if (!mapOpen) setMapOpen(true);
     } catch (e) { setSearch({ query, loading: false, items: null, error: e }); }
   };
-  const closeSearch = () => { setSearch(null); setQ(''); setActiveRes(null); setSearchFocused(false); setFitKey((k) => k + 1); };
+  const closeSearch = () => {
+    setSearch(null); setQ(''); setActiveRes(null); setSearchFocused(false);
+    if (region) setFocus({ lat: region.lat, lng: region.lng, zoom: region.zoom, t: Date.now() });
+  };
 
   const locateMe = () => {
     if (!navigator.geolocation) return flash('이 기기에서는 위치를 쓸 수 없어요');
@@ -928,10 +1076,20 @@ function App() {
     flash(isNew ? '우리 지도에 저장했어요 ☕' : '수정했어요');
   };
   const remove = (id) => { setCafes((p) => p.filter((c) => c.id !== id)); setDetailId(null); setSelectedId(null); flash('삭제했어요'); };
-  const toggleFilter = (k) => { vibrate(); setFilters((p) => ({ ...p, [k]: !p[k] })); setSelectedId(null); setFitKey((x) => x + 1); };
+  const toggleFilter = (k) => {
+    vibrate(); setSelectedId(null);
+    setFilters((p) => {
+      const next = { ...p, [k]: !p[k] };
+      // 필터를 켜면 해당 기록들이 보이게 맞추고, 다 끄면 시작 지역으로
+      if (Object.values(next).some(Boolean)) setFitKey((x) => x + 1);
+      else if (region) setFocus({ lat: region.lat, lng: region.lng, zoom: region.zoom, t: Date.now() });
+      return next;
+    });
+  };
 
   const detail = cafes.find((c) => c.id === detailId);
-  const center = adapterRef.current ? adapterRef.current.center() : DEFAULT_CENTER;
+  const startCenter = region ? [region.lat, region.lng] : DEFAULT_CENTER;
+  const center = adapterRef.current ? adapterRef.current.center() : startCenter;
   const inSearch = !!search;
 
   return (
@@ -942,7 +1100,10 @@ function App() {
           <div className="flex items-center gap-2.5">
             <span className="grid h-11 w-11 place-items-center rounded-2xl bg-coral-100"><Bichon className="h-10 w-10" /></span>
             <div>
-              <p className="text-[12px] font-semibold text-ink-400">아기랑 · 우리 강아지랑</p>
+              <button onClick={() => setShowRegion(true)}
+                className="-ml-0.5 mb-0.5 inline-flex items-center gap-1 rounded-full bg-white px-2 py-0.5 text-[12px] font-bold text-coral-600 ring-1 ring-coral-100 active:scale-95">
+                📍 {region ? region.name : '지역 선택'} <span className="text-[10px]">▾</span>
+              </button>
               <h1 className="text-[20px] font-extrabold leading-tight tracking-tight text-ink-900">우리가족 나들이 지도</h1>
             </div>
           </div>
@@ -961,10 +1122,18 @@ function App() {
               <button onClick={closeSearch} className="shrink-0 px-1 text-[14px] font-bold text-ink-500">취소</button>
             )}
           </div>
+          {searchFocused && !inSearch && regionName && (
+            <button onMouseDown={(e) => e.preventDefault()} onClick={() => setScoped((v) => !v)}
+              className={`mt-2 inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[12px] font-bold ring-1 fade-in ${scoped ? 'bg-coral-50 text-coral-600 ring-coral-100' : 'bg-white text-ink-400 ring-ink-400/20'}`}>
+              <span className={`grid h-3.5 w-3.5 place-items-center rounded-[4px] text-[9px] ${scoped ? 'bg-coral-500 text-white' : 'ring-1 ring-ink-400/40'}`}>{scoped && '✓'}</span>
+              {regionName} 안에서만 찾기
+            </button>
+          )}
           {searchFocused && !inSearch && (
             <div className="mt-2 flex gap-2 overflow-x-auto no-scrollbar fade-in">
               {QUICK_SEARCHES.map((s) => {
-                const query = area ? `${area} ${s}` : s;
+                const place = area || regionName;
+                const query = place ? `${place} ${s}` : s;
                 return (
                   <button key={s} onMouseDown={(e) => e.preventDefault()} onClick={() => runSearch(query)}
                     className="shrink-0 rounded-full bg-white px-3 py-1.5 text-[12px] font-bold text-ink-700 ring-1 ring-ink-400/20 active:scale-95">
@@ -995,7 +1164,8 @@ function App() {
 
       {/* 지도 */}
       <section className={`relative shrink-0 transition-[height] duration-300 ${mapOpen ? 'h-[36dvh]' : 'h-0'}`}>
-        <MapView engine={engine} markers={markers} fitKey={fitKey} focus={focus} onReady={(a) => { adapterRef.current = a; }} />
+        <MapView engine={engine} markers={markers} fitKey={fitKey} focus={focus} onReady={(a) => { adapterRef.current = a; }}
+          initialCenter={startCenter} initialZoom={region ? region.zoom : 12} />
         {mapOpen && (
           <button onClick={locateMe} aria-label="내 위치"
             className="absolute bottom-6 right-3 z-[500] grid h-10 w-10 place-items-center rounded-full bg-white text-lg text-sky2-500 shadow-card active:scale-95">◎</button>
@@ -1052,8 +1222,8 @@ function App() {
               {visible.length === 0 && (
                 <div className="mt-8 flex flex-col items-center text-center text-ink-500">
                   <Bichon className="h-16 w-16" />
-                  <p className="mt-3 font-bold text-ink-700">조건에 맞는 곳이 아직 없어요</p>
-                  <p className="text-sm">위 검색창에서 네이버로 찾아 기록해 보세요</p>
+                  <p className="mt-3 font-bold text-ink-700">{cafes.length ? '조건에 맞는 곳이 아직 없어요' : '아직 다녀온 곳이 없어요'}</p>
+                  <p className="text-sm">위 검색창에서 ‘{regionName ? `${regionName} ` : ''}애견동반 카페’처럼 찾아서 기록해 보세요</p>
                 </div>
               )}
               {visible.length > 0 && <p className="pt-2 text-center text-[12px] text-ink-400">카드를 한 번 더 누르면 상세 정보가 열려요</p>}
@@ -1080,7 +1250,10 @@ function App() {
           initial={editing.mode === 'new' ? null : editing} prefill={editing.mode === 'new' ? editing.prefill : null}
           onClose={() => setEditing(null)} onSave={save} />
       )}
-      {showInstall && (
+      {showRegion && (
+        <RegionSheet current={region} firstRun={!region} onPick={chooseRegion} onClose={() => setShowRegion(false)} />
+      )}
+      {showInstall && !showRegion && (
         <InstallGuide deferredPrompt={deferredPrompt} onInstalled={() => setShowInstall(false)}
           onClose={() => { setShowInstall(false); try { localStorage.setItem('install-dismissed', '1'); } catch (e) {} }} />
       )}
