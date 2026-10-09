@@ -166,7 +166,14 @@ const PROVINCES = [
 ];
 // 검색어에 붙일 지역 이름 ("화성(동탄)" → "동탄", "제주시" → "제주시")
 const searchNameOf = (r) => (r ? (r.searchName || r.name.replace(/^.*\((.+)\)$/, '$1')) : '');
-const loadRegion = () => { try { return JSON.parse(localStorage.getItem(REGION_KEY) || 'null'); } catch (e) { return null; } };
+// 여러 지역 저장 (예전 버전의 지역 1곳 저장값도 그대로 읽음)
+const loadRegions = () => {
+  try {
+    const v = JSON.parse(localStorage.getItem(REGION_KEY) || 'null');
+    if (Array.isArray(v)) return v.length ? v : null;
+    return v ? [v] : null;
+  } catch (e) { return null; }
+};
 
 const loadCafes = () => {
   try {
@@ -394,6 +401,7 @@ function SearchResult({ item, index, active, saved, onFocus, onRecord, onOpenSav
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-x-2">
             <h3 className="text-[15px] font-bold text-ink-900">{item.name}</h3>
+            {item.region && <span className="rounded-full bg-sky2-50 px-2 py-0.5 text-[11px] font-bold text-sky2-700">📍 {item.region}</span>}
             {saved && <span className="rounded-full bg-coral-50 px-2 py-0.5 text-[11px] font-bold text-coral-600">★ 기록함</span>}
           </div>
           <p className="text-[12px] text-ink-400">{item.category}</p>
@@ -765,75 +773,108 @@ function AddCafeSheet({ initial, prefill, engine, center, searchEnabled, onClose
 }
 
 /* ───────────────────────── 시작 지역 선택 ───────────────────────── */
-function RegionSheet({ current, firstRun, onPick, onClose }) {
+function RegionSheet({ current, firstRun, onDone, onClose }) {
+  const MAX = 5;
+  const [sel, setSel] = useState(() => current || []);
   const [filter, setFilter] = useState('');
   const [openProv, setOpenProv] = useState(null);
   const [locating, setLocating] = useState(false);
   const f = filter.trim();
-  const isCur = (name) => current && current.name === name;
+  const isSel = (name) => sel.some((r) => r.name === name);
 
-  const pickCity = (prov, [name, lat, lng]) => { vibrate(); onPick({ name, province: prov, lat, lng, zoom: 13 }); };
-  const useHere = () => {
+  const toggle = (r) => {
+    vibrate();
+    setSel((prev) => {
+      if (prev.some((x) => x.name === r.name)) return prev.filter((x) => x.name !== r.name);
+      if (prev.length >= MAX) { alert(`지역은 ${MAX}곳까지 고를 수 있어요.`); return prev; }
+      return [...prev, r];
+    });
+  };
+  const cityRegion = (prov, [name, lat, lng]) => ({ name, province: prov, lat, lng, zoom: 13 });
+  const toggleHere = () => {
+    const had = sel.find((r) => r.here);
+    if (had) return setSel((p) => p.filter((r) => !r.here));
     if (!navigator.geolocation) return alert('이 기기에서는 위치를 쓸 수 없어요.');
     setLocating(true);
     navigator.geolocation.getCurrentPosition(async (p) => {
       const lat = p.coords.latitude, lng = p.coords.longitude;
       const area = await reverseArea(lat, lng);
       setLocating(false);
-      onPick({ name: area || '내 주변', searchName: area || '', here: true, lat, lng, zoom: 14 });
-    }, () => { setLocating(false); alert('위치 권한을 허용하면 지금 있는 곳에서 시작할 수 있어요.'); },
+      toggle({ name: area || '내 주변', searchName: area || '', here: true, lat, lng, zoom: 14 });
+    }, () => { setLocating(false); alert('위치 권한을 허용하면 지금 있는 곳을 추가할 수 있어요.'); },
     { enableHighAccuracy: true, timeout: 8000 });
   };
 
   const cityMatches = f ? PROVINCES.flatMap((p) => p.cities.filter((c) => c[0].includes(f) || p.name.includes(f)).map((c) => [p.name, c])) : [];
   const metroMatches = f ? METROS.filter((m) => m.name.includes(f)) : METROS;
-  const chip = (active) => `rounded-2xl px-3 py-3 text-[15px] font-bold transition active:scale-95 ${active ? 'bg-coral-500 text-white shadow-md' : 'bg-white text-ink-700 ring-1 ring-ink-400/20'}`;
+  const Check = ({ on }) => (
+    <span className={`grid h-4 w-4 shrink-0 place-items-center rounded-[5px] text-[10px] ${on ? 'bg-white text-coral-600' : 'ring-1 ring-ink-400/40'}`}>{on && '✓'}</span>
+  );
+  const chip = (on) => `flex items-center justify-center gap-1.5 rounded-2xl px-2 py-3 text-[15px] font-bold transition active:scale-95 ${on ? 'bg-coral-500 text-white shadow-md' : 'bg-white text-ink-700 ring-1 ring-ink-400/20'}`;
+  const hereSel = sel.find((r) => r.here);
 
   return (
     <div className="fixed inset-0 z-[1150] fade-in">
       <div className="absolute inset-0 bg-ink-900/40" onClick={firstRun ? undefined : onClose} />
-      <div className={`absolute inset-x-0 bottom-0 mx-auto flex max-w-md flex-col rounded-t-[28px] bg-cream sheet-up ${firstRun ? 'h-[100dvh] rounded-none' : 'max-h-[90dvh]'}`}>
-        <div className={`px-5 pb-3 ${firstRun ? 'pt-[calc(env(safe-area-inset-top)+28px)]' : 'pt-5'}`}>
+      <div className={`absolute inset-x-0 bottom-0 mx-auto flex max-w-md flex-col bg-cream sheet-up ${firstRun ? 'h-[100dvh]' : 'max-h-[92dvh] rounded-t-[28px]'}`}>
+        <div className={`px-5 pb-3 ${firstRun ? 'pt-[calc(env(safe-area-inset-top)+24px)]' : 'pt-5'}`}>
           {firstRun ? (
             <div className="mb-4 flex flex-col items-center text-center">
               <span className="grid h-20 w-20 place-items-center rounded-[28px] bg-coral-100"><Bichon className="h-16 w-16" /></span>
-              <h2 className="mt-3 text-[22px] font-extrabold text-ink-900">어디서 나들이를 시작할까요?</h2>
-              <p className="mt-1 text-sm text-ink-500">고른 지역에서 지도가 열리고, 네이버 검색도 그 지역 위주로 찾아요.<br />나중에 위쪽 📍 지역 버튼으로 언제든 바꿀 수 있어요.</p>
+              <h2 className="mt-3 text-[22px] font-extrabold text-ink-900">어디로 나들이 다니세요?</h2>
+              <p className="mt-1 text-sm text-ink-500">자주 가는 지역을 <b>여러 곳</b> 골라도 돼요. 처음 고른 곳에서 지도가 열리고,<br />네이버 검색은 고른 지역 모두에서 찾아요.</p>
             </div>
           ) : (
             <div className="mb-3 flex items-center justify-between">
-              <h2 className="text-lg font-extrabold text-ink-900">시작 지역 바꾸기</h2>
+              <div>
+                <h2 className="text-lg font-extrabold text-ink-900">우리 나들이 지역</h2>
+                <p className="text-[12px] text-ink-400">여러 곳 선택 가능 · 처음 고른 곳이 시작 지역</p>
+              </div>
               <button onClick={onClose} aria-label="닫기" className="h-9 w-9 rounded-full bg-white text-ink-500 ring-1 ring-ink-400/20">✕</button>
             </div>
           )}
-          <button onClick={useHere}
-            className="mb-3 flex w-full items-center justify-center gap-2 rounded-2xl bg-sky2-50 py-3.5 text-[15px] font-bold text-sky2-700 ring-1 ring-sky2-100 active:scale-[.98]">
-            {locating ? <div className="spinner" /> : '◎'} 지금 있는 곳에서 시작하기
+
+          {/* 고른 지역 */}
+          <div className="mb-3 flex min-h-[36px] flex-wrap items-center gap-1.5">
+            {sel.length === 0 && <span className="text-[13px] text-ink-400">아직 고른 지역이 없어요</span>}
+            {sel.map((r, i) => (
+              <button key={r.name} onClick={() => toggle(r)}
+                className="inline-flex items-center gap-1 rounded-full bg-coral-50 py-1 pl-2.5 pr-2 text-[13px] font-bold text-coral-700 ring-1 ring-coral-100 active:scale-95">
+                {i === 0 && <span className="rounded-full bg-coral-500 px-1.5 text-[10px] text-white">시작</span>}
+                {r.name}<span className="text-coral-400">✕</span>
+              </button>
+            ))}
+          </div>
+
+          <button onClick={toggleHere}
+            className={`mb-3 flex w-full items-center justify-center gap-2 rounded-2xl py-3 text-[15px] font-bold ring-1 active:scale-[.98] ${hereSel ? 'bg-sky2-500 text-white ring-sky2-500' : 'bg-sky2-50 text-sky2-700 ring-sky2-100'}`}>
+            {locating ? <div className="spinner" /> : hereSel ? '✓' : '◎'} 지금 있는 곳 {hereSel ? `(${hereSel.name}) 추가됨` : '추가하기'}
           </button>
           <input value={filter} onChange={(e) => setFilter(e.target.value)} placeholder="도시 이름으로 찾기 (예: 천안, 동탄)"
             className="w-full rounded-2xl bg-white px-4 py-3 text-ink-900 outline-none ring-1 ring-ink-400/20 focus:ring-2 focus:ring-coral-400 placeholder:text-ink-400/70" />
         </div>
 
-        <div className="flex-1 overflow-y-auto no-scrollbar px-5 pb-[calc(env(safe-area-inset-bottom)+24px)]">
+        <div className="flex-1 overflow-y-auto no-scrollbar px-5 pb-4">
           {metroMatches.length > 0 && (
             <>
               <h3 className="mb-2 mt-1 text-[12px] font-bold text-ink-400">특별·광역시</h3>
               <div className="grid grid-cols-4 gap-2">
                 {metroMatches.map((m) => (
-                  <button key={m.name} onClick={() => { vibrate(); onPick(m); }} className={chip(isCur(m.name))}>{m.name}</button>
+                  <button key={m.name} onClick={() => toggle(m)} aria-pressed={isSel(m.name)} className={chip(isSel(m.name))}>
+                    <Check on={isSel(m.name)} />{m.name}
+                  </button>
                 ))}
               </div>
             </>
           )}
-
           {f ? (
             cityMatches.length > 0 && (
               <>
                 <h3 className="mb-2 mt-5 text-[12px] font-bold text-ink-400">도시</h3>
                 <div className="grid grid-cols-3 gap-2">
                   {cityMatches.map(([prov, c]) => (
-                    <button key={prov + c[0]} onClick={() => pickCity(prov, c)} className={chip(isCur(c[0]))}>
-                      {c[0]}<span className="block text-[11px] font-semibold opacity-60">{prov}</span>
+                    <button key={prov + c[0]} onClick={() => toggle(cityRegion(prov, c))} aria-pressed={isSel(c[0])} className={chip(isSel(c[0]))}>
+                      <Check on={isSel(c[0])} /><span>{c[0]}<span className="block text-[11px] font-semibold opacity-60">{prov}</span></span>
                     </button>
                   ))}
                 </div>
@@ -845,21 +886,26 @@ function RegionSheet({ current, firstRun, onPick, onClose }) {
               <div className="space-y-2">
                 {PROVINCES.map((p) => {
                   const open = openProv === p.name;
-                  const has = current && current.province === p.name;
+                  const picked = sel.filter((r) => r.province === p.name);
                   return (
                     <div key={p.name} className="rounded-2xl bg-white ring-1 ring-ink-400/15">
                       <button onClick={() => setOpenProv(open ? null : p.name)} className="flex w-full items-center justify-between px-4 py-3.5">
                         <span className="text-[15px] font-bold text-ink-900">{p.name}
-                          {has && <span className="ml-2 rounded-full bg-coral-50 px-2 py-0.5 text-[11px] text-coral-600">{current.name}</span>}
+                          {picked.length > 0 && <span className="ml-2 rounded-full bg-coral-50 px-2 py-0.5 text-[11px] text-coral-600">{picked.map((r) => r.name).join(' · ')}</span>}
                         </span>
                         <span className={`text-ink-400 transition ${open ? 'rotate-180' : ''}`}>▾</span>
                       </button>
                       {open && (
                         <div className="grid grid-cols-3 gap-2 px-3 pb-3 fade-in">
-                          {p.cities.map((c) => (
-                            <button key={c[0]} onClick={() => pickCity(p.name, c)}
-                              className={`rounded-xl py-2.5 text-[14px] font-bold active:scale-95 ${isCur(c[0]) ? 'bg-coral-500 text-white' : 'bg-cream text-ink-700'}`}>{c[0]}</button>
-                          ))}
+                          {p.cities.map((c) => {
+                            const on = isSel(c[0]);
+                            return (
+                              <button key={c[0]} onClick={() => toggle(cityRegion(p.name, c))} aria-pressed={on}
+                                className={`flex items-center justify-center gap-1.5 rounded-xl py-2.5 text-[14px] font-bold active:scale-95 ${on ? 'bg-coral-500 text-white' : 'bg-cream text-ink-700'}`}>
+                                <Check on={on} />{c[0]}
+                              </button>
+                            );
+                          })}
                         </div>
                       )}
                     </div>
@@ -869,8 +915,15 @@ function RegionSheet({ current, firstRun, onPick, onClose }) {
             </>
           )}
           {f && metroMatches.length === 0 && cityMatches.length === 0 && (
-            <p className="mt-6 text-center text-sm text-ink-500">목록에 없는 곳이면 ‘지금 있는 곳에서 시작하기’를 써 주세요.</p>
+            <p className="mt-6 text-center text-sm text-ink-500">목록에 없는 곳이면 ‘지금 있는 곳 추가하기’를 써 주세요.</p>
           )}
+        </div>
+
+        <div className="border-t border-ink-400/10 px-5 pt-3 pb-[calc(env(safe-area-inset-bottom)+12px)]">
+          <button disabled={!sel.length} onClick={() => onDone(sel)}
+            className="w-full rounded-2xl bg-coral-500 py-4 text-base font-extrabold text-white shadow-lg shadow-coral-500/30 active:scale-[.98] disabled:bg-ink-400/30 disabled:shadow-none">
+            {sel.length ? `${sel.map((r) => r.name).join(' · ')} 선택 완료` : '지역을 골라 주세요'}
+          </button>
         </div>
       </div>
     </div>
@@ -942,8 +995,9 @@ function App() {
   const [me, setMe] = useState(null);
   const [fitKey, setFitKey] = useState(0);
   // 시작 지역
-  const [region, setRegion] = useState(loadRegion);
-  const [showRegion, setShowRegion] = useState(() => !loadRegion());
+  const [regions, setRegions] = useState(loadRegions); // [시작 지역, ...]
+  const [showRegion, setShowRegion] = useState(() => !loadRegions());
+  const region = regions ? regions[0] : null; // 시작 지역
   const [scoped, setScoped] = useState(true); // 검색을 시작 지역 안에서
   // 네이버 검색 상태
   const [q, setQ] = useState('');
@@ -1031,27 +1085,43 @@ function App() {
     }
   };
 
-  const regionName = searchNameOf(region);
-  const chooseRegion = (r) => {
-    setRegion(r); setShowRegion(false); setArea(''); setScoped(true);
-    try { localStorage.setItem(REGION_KEY, JSON.stringify(r)); } catch (e) {}
-    setFocus({ lat: r.lat, lng: r.lng, zoom: r.zoom, t: Date.now() });
+  const regionNames = (regions || []).map(searchNameOf).filter(Boolean);
+  const regionName = regionNames[0] || '';
+  const multi = regionNames.length > 1;
+  const goRegion = (r) => setFocus({ lat: r.lat, lng: r.lng, zoom: r.zoom, t: Date.now() });
+
+  const chooseRegions = (list) => {
+    setRegions(list); setShowRegion(false); setArea(''); setScoped(true);
+    try { localStorage.setItem(REGION_KEY, JSON.stringify(list)); } catch (e) {}
+    goRegion(list[0]);
     if (!mapOpen) setMapOpen(true);
-    flash(`📍 ${r.name}에서 시작할게요`);
+    flash(list.length > 1 ? `📍 ${list.map((r) => r.name).join(' · ')} — ${list[0].name}에서 시작할게요` : `📍 ${list[0].name}에서 시작할게요`);
   };
 
   const runSearch = async (input) => {
     input = (input || '').trim(); if (!input) return;
-    // 시작 지역 안에서 찾기: 검색어에 지역 이름이 없으면 앞에 붙임
-    const query = scoped && regionName && !input.includes(regionName) ? `${regionName} ${input}` : input;
+    // 고른 지역 안에서 찾기: 검색어에 지역 이름이 없으면 지역마다 따로 검색해서 합침
+    const typedRegion = regionNames.some((n) => input.includes(n));
+    const queries = scoped && regionNames.length && !typedRegion ? regionNames.map((n) => `${n} ${input}`) : [input];
+    const label = queries.length > 1 ? `${regionNames.join('·')} ‘${input}’` : `‘${queries[0]}’`;
+    const base = { query: queries[0], label, multi: queries.length > 1 };
     setQ(input); setSearchFocused(false); setActiveRes(null); setSelectedId(null);
     document.activeElement && document.activeElement.blur && document.activeElement.blur();
-    setSearch({ query, loading: true, items: null, error: null });
-    try {
-      const items = await naverSearch(query);
-      setSearch({ query, loading: false, items, error: null });
-      setFitKey((k) => k + 1); if (!mapOpen) setMapOpen(true);
-    } catch (e) { setSearch({ query, loading: false, items: null, error: e }); }
+    setSearch({ ...base, loading: true, items: null, error: null });
+    const settled = await Promise.allSettled(queries.map((qq) => naverSearch(qq)));
+    const ok = settled.filter((s) => s.status === 'fulfilled');
+    if (!ok.length) return setSearch({ ...base, loading: false, items: null, error: settled[0].reason });
+    const seen = new Set(); const items = [];
+    settled.forEach((s, i) => {
+      if (s.status !== 'fulfilled') return;
+      s.value.forEach((it) => {
+        const key = norm(it.name) + norm(it.roadAddress || it.address);
+        if (seen.has(key)) return; seen.add(key);
+        items.push({ ...it, region: queries.length > 1 ? regionNames[i] : '' });
+      });
+    });
+    setSearch({ ...base, loading: false, items, error: null });
+    setFitKey((k) => k + 1); if (!mapOpen) setMapOpen(true);
   };
   const closeSearch = () => {
     setSearch(null); setQ(''); setActiveRes(null); setSearchFocused(false);
@@ -1102,7 +1172,7 @@ function App() {
             <div>
               <button onClick={() => setShowRegion(true)}
                 className="-ml-0.5 mb-0.5 inline-flex items-center gap-1 rounded-full bg-white px-2 py-0.5 text-[12px] font-bold text-coral-600 ring-1 ring-coral-100 active:scale-95">
-                📍 {region ? region.name : '지역 선택'} <span className="text-[10px]">▾</span>
+                📍 {region ? region.name : '지역 선택'}{regions && regions.length > 1 ? ` 외 ${regions.length - 1}곳` : ''} <span className="text-[10px]">▾</span>
               </button>
               <h1 className="text-[20px] font-extrabold leading-tight tracking-tight text-ink-900">우리가족 나들이 지도</h1>
             </div>
@@ -1126,13 +1196,14 @@ function App() {
             <button onMouseDown={(e) => e.preventDefault()} onClick={() => setScoped((v) => !v)}
               className={`mt-2 inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[12px] font-bold ring-1 fade-in ${scoped ? 'bg-coral-50 text-coral-600 ring-coral-100' : 'bg-white text-ink-400 ring-ink-400/20'}`}>
               <span className={`grid h-3.5 w-3.5 place-items-center rounded-[4px] text-[9px] ${scoped ? 'bg-coral-500 text-white' : 'ring-1 ring-ink-400/40'}`}>{scoped && '✓'}</span>
-              {regionName} 안에서만 찾기
+              {multi ? `${regionNames.join('·')}에서 찾기` : `${regionName} 안에서만 찾기`}
             </button>
           )}
           {searchFocused && !inSearch && (
             <div className="mt-2 flex gap-2 overflow-x-auto no-scrollbar fade-in">
               {QUICK_SEARCHES.map((s) => {
-                const place = area || regionName;
+                // 지역이 여러 곳이면 검색 시 지역마다 붙으므로 추천어엔 지역 이름을 안 붙임
+                const place = multi && scoped ? '' : (area || regionName);
                 const query = place ? `${place} ${s}` : s;
                 return (
                   <button key={s} onMouseDown={(e) => e.preventDefault()} onClick={() => runSearch(query)}
@@ -1170,8 +1241,16 @@ function App() {
           <button onClick={locateMe} aria-label="내 위치"
             className="absolute bottom-6 right-3 z-[500] grid h-10 w-10 place-items-center rounded-full bg-white text-lg text-sky2-500 shadow-card active:scale-95">◎</button>
         )}
+        {mapOpen && regions && regions.length > 1 && (
+          <div className="absolute inset-x-0 top-2 z-[500] flex gap-1.5 overflow-x-auto no-scrollbar px-2">
+            {regions.map((r) => (
+              <button key={r.name} onClick={() => { vibrate(); goRegion(r); }}
+                className="shrink-0 rounded-full bg-white/95 px-3 py-1.5 text-[12px] font-bold text-ink-700 shadow-card active:scale-95">📍 {r.name}</button>
+            ))}
+          </div>
+        )}
         {engine === 'leaflet' && mapOpen && (
-          <span className="absolute left-2 top-2 z-[500] rounded-full bg-white/90 px-2 py-0.5 text-[10px] font-semibold text-ink-500 shadow">기본 지도 · 네이버 지도 설정 전</span>
+          <span className="absolute bottom-7 left-2 z-[500] rounded-full bg-white/90 px-2 py-0.5 text-[10px] font-semibold text-ink-500 shadow">기본 지도 · 네이버 지도 설정 전</span>
         )}
         <div className="pointer-events-none absolute inset-x-0 bottom-0 z-[400] h-6 bg-gradient-to-t from-cream to-transparent" />
       </section>
@@ -1185,7 +1264,7 @@ function App() {
         {inSearch ? (
           <>
             <div className="flex items-baseline justify-between px-5 pb-2">
-              <h2 className="truncate text-[15px] font-extrabold text-ink-900"><span className="text-naver-600">N</span> ‘{search.query}’ 검색 결과</h2>
+              <h2 className="truncate text-[15px] font-extrabold text-ink-900"><span className="text-naver-600">N</span> {search.label} 검색 결과</h2>
               <a href={`https://map.naver.com/p/search/${encodeURIComponent(search.query)}`} target="_blank" rel="noopener" className="shrink-0 text-[12px] font-bold text-naver-600">더 보기 →</a>
             </div>
             <div className="flex-1 space-y-3 overflow-y-auto no-scrollbar px-4 pb-32">
@@ -1204,7 +1283,7 @@ function App() {
                 );
               })}
               {search.items && search.items.length > 0 && (
-                <p className="pt-1 text-center text-[12px] text-ink-400">네이버 검색은 한 번에 최대 5곳까지 보여줘요 · 더 많은 곳은 ‘더 보기’</p>
+                <p className="pt-1 text-center text-[12px] text-ink-400">네이버 검색은 {search.multi ? '지역마다' : '한 번에'} 최대 5곳까지 보여줘요 · 더 많은 곳은 ‘더 보기’</p>
               )}
             </div>
           </>
@@ -1251,7 +1330,7 @@ function App() {
           onClose={() => setEditing(null)} onSave={save} />
       )}
       {showRegion && (
-        <RegionSheet current={region} firstRun={!region} onPick={chooseRegion} onClose={() => setShowRegion(false)} />
+        <RegionSheet current={regions} firstRun={!regions} onDone={chooseRegions} onClose={() => setShowRegion(false)} />
       )}
       {showInstall && !showRegion && (
         <InstallGuide deferredPrompt={deferredPrompt} onInstalled={() => setShowInstall(false)}

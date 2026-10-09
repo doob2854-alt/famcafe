@@ -1,5 +1,5 @@
 // 가족나들이 서비스 워커 — 앱 화면은 오프라인에서도 열리고, 라이브러리·지도 타일은 캐시해 둡니다.
-const VERSION = 'v2.1.0';
+const VERSION = 'v2.2.0';
 const APP_CACHE = `app-${VERSION}`;
 const RUNTIME_CACHE = `runtime-${VERSION}`;
 
