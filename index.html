@@ -1,0 +1,1100 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <!-- 노치/홈 인디케이터 영역까지 꽉 채우고, 확대 방지로 앱처럼 동작 -->
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <title>가족나들이</title>
+  <meta name="description" content="아기와 강아지가 함께 가는 카페·나들이 장소 가족 지도" />
+
+  <!-- PWA: 매니페스트 + 테마 색 -->
+  <link rel="manifest" href="manifest.json" />
+  <meta name="theme-color" content="#F97362" />
+
+  <!-- iOS: 홈 화면에 추가 시 주소창 없는 전체 화면 앱으로 실행 -->
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="가족나들이" />
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+  <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png" />
+  <meta name="format-detection" content="telephone=no" />
+
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { sans: ['"Pretendard Variable"', 'Pretendard', 'system-ui', 'sans-serif'] },
+          colors: {
+            cream: '#FFF8F3',
+            coral: { 50: '#FFF1EE', 100: '#FFE0DA', 400: '#FB8A7A', 500: '#F97362', 600: '#E85A48', 700: '#C4432F' },
+            sage: { 50: '#EEF7F1', 100: '#D8EEDF', 500: '#4E9A6B', 700: '#2F6E48' },
+            sky2: { 50: '#EEF5FD', 100: '#D9E8FA', 500: '#4A86D4', 700: '#2D5FA3' },
+            honey: { 50: '#FFF7E6', 100: '#FDEBC4', 500: '#E2A12B', 700: '#A26A0B' },
+            naver: { 500: '#03C75A', 600: '#02B350' },
+            ink: { 400: '#9A8F89', 500: '#7A6F69', 700: '#4A403B', 900: '#2A2320' },
+          },
+          boxShadow: { card: '0 1px 2px rgba(42,35,32,.06), 0 6px 18px -8px rgba(42,35,32,.18)' },
+        },
+      },
+    };
+  </script>
+  <style>
+    html, body, #root { height: 100%; }
+    body {
+      margin: 0; background: #FFF8F3; color: #2A2320;
+      overscroll-behavior: none;
+      -webkit-tap-highlight-color: transparent;
+      -webkit-user-select: none; user-select: none;
+      -webkit-font-smoothing: antialiased;
+    }
+    input, textarea { -webkit-user-select: text; user-select: text; font-size: 16px; } /* iOS 입력 시 자동 확대 방지 */
+    .pt-safe { padding-top: env(safe-area-inset-top); }
+    .pb-safe { padding-bottom: env(safe-area-inset-bottom); }
+    .bottom-safe { bottom: calc(env(safe-area-inset-bottom) + 16px); }
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { scrollbar-width: none; }
+    .leaflet-container { font-family: inherit; background: #F3EDE7; }
+    .leaflet-control-attribution { font-size: 9px; }
+    /* 지도 핀 */
+    .pin { width: 100%; height: 100%; border-radius: 50% 50% 50% 0; transform: rotate(-45deg);
+           display: grid; place-items: center; border: 3px solid #fff; box-sizing: border-box;
+           box-shadow: 0 4px 10px rgba(0,0,0,.28); }
+    .pin > * { transform: rotate(45deg); }
+    .pin .face { width: 84%; height: 84%; }
+    .pin .emo { font-size: 15px; line-height: 1; }
+    .pin .num { color: #fff; font-weight: 800; font-size: 15px; font-family: inherit; }
+    .me-dot { width: 18px; height: 18px; border-radius: 50%; background: #4A86D4; border: 3px solid #fff; box-sizing: border-box;
+              box-shadow: 0 0 0 6px rgba(74,134,212,.25); }
+    @keyframes sheetUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .sheet-up { animation: sheetUp .28s cubic-bezier(.2,.8,.2,1); }
+    .fade-in { animation: fadeIn .2s ease-out; }
+    .spinner { width: 18px; height: 18px; border-radius: 50%; border: 2.5px solid #FFE0DA; border-top-color: #F97362; animation: spin .8s linear infinite; }
+  </style>
+</head>
+<body>
+  <!-- 우리집 비숑 얼굴 (앱 전체에서 재사용) -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <defs>
+      <radialGradient id="bichon-fur" cx="50%" cy="42%" r="60%">
+        <stop offset="0" stop-color="#FFFFFF"/><stop offset=".75" stop-color="#FBF8F4"/><stop offset="1" stop-color="#EDE6DE"/>
+      </radialGradient>
+      <symbol id="bichon" viewBox="0 0 100 100">
+        <g fill="url(#bichon-fur)" stroke="#E2D9CF" stroke-width="1.6">
+          <circle cx="17" cy="52" r="15"/><circle cx="83" cy="52" r="15"/>
+          <circle cx="15" cy="66" r="11"/><circle cx="85" cy="66" r="11"/>
+          <circle cx="50" cy="20" r="18"/><circle cx="31" cy="25" r="15"/><circle cx="69" cy="25" r="15"/>
+          <circle cx="24" cy="38" r="14"/><circle cx="76" cy="38" r="14"/>
+          <circle cx="30" cy="72" r="15"/><circle cx="70" cy="72" r="15"/><circle cx="50" cy="80" r="16"/>
+        </g>
+        <circle cx="50" cy="52" r="31" fill="url(#bichon-fur)"/>
+        <ellipse cx="38" cy="56" rx="4" ry="2.5" fill="#F3E3D3" opacity=".8"/>
+        <ellipse cx="62" cy="56" rx="4" ry="2.5" fill="#F3E3D3" opacity=".8"/>
+        <circle cx="37" cy="48" r="6.2" fill="#231C19"/><circle cx="63" cy="48" r="6.2" fill="#231C19"/>
+        <circle cx="39.2" cy="45.6" r="2" fill="#fff"/><circle cx="65.2" cy="45.6" r="2" fill="#fff"/>
+        <ellipse cx="50" cy="63" rx="13" ry="10" fill="#FFFFFF"/>
+        <ellipse cx="50" cy="58.5" rx="6.2" ry="4.8" fill="#231C19"/>
+        <ellipse cx="48.2" cy="57" rx="1.8" ry="1.1" fill="#fff" opacity=".55"/>
+        <path d="M50 63.5 v3.5 M50 67 q-4.5 3.5 -8 0.5 M50 67 q4.5 3.5 8 0.5" stroke="#231C19" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+        <path d="M47 68.8 q3 6 6 0 z" fill="#F58B98"/>
+        <ellipse cx="28" cy="60" rx="5" ry="3" fill="#FFC7C2" opacity=".7"/>
+        <ellipse cx="72" cy="60" rx="5" ry="3" fill="#FFC7C2" opacity=".7"/>
+      </symbol>
+    </defs>
+  </svg>
+
+  <div id="root"></div>
+  <noscript>이 앱을 사용하려면 JavaScript를 켜 주세요.</noscript>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.26.2/babel.min.js"></script>
+
+  <script type="text/babel" data-presets="react">
+const { useState, useEffect, useRef, useMemo, useCallback } = React;
+
+/* ───────────────────────── 설정 · 데이터 ───────────────────────── */
+const STORAGE_KEY = 'family-cafe-map/v1';
+const DEFAULT_CENTER = [37.5465, 126.9970]; // 서울
+const BICHON_SVG = '<svg viewBox="0 0 100 100" class="face" aria-hidden="true"><use href="#bichon"/></svg>';
+
+const TAGS = [
+  { key: 'babyChair', label: '아기 의자',   emoji: '🪑', on: 'bg-honey-50 text-honey-700 ring-honey-100', pin: '#E2A12B' },
+  { key: 'stroller',  label: '유모차 진입', emoji: '👶', on: 'bg-sky2-50 text-sky2-700 ring-sky2-100',  pin: '#4A86D4' },
+  { key: 'pet',       label: '반려견 동반', emoji: null, on: 'bg-sage-50 text-sage-700 ring-sage-100',  pin: '#4E9A6B' },
+];
+
+const SAMPLE_PHOTOS = [
+  { label: '아늑한 실내', url: 'https://images.unsplash.com/photo-1554118811-1e0d58224f24?w=800&q=70&auto=format&fit=crop' },
+  { label: '창가 자리',   url: 'https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb?w=800&q=70&auto=format&fit=crop' },
+  { label: '라떼',        url: 'https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?w=800&q=70&auto=format&fit=crop' },
+  { label: '원두 카운터', url: 'https://images.unsplash.com/photo-1445116572660-236099ec97a0?w=800&q=70&auto=format&fit=crop' },
+  { label: '테라스',      url: 'https://images.unsplash.com/photo-1559925393-8be0ec4767c8?w=800&q=70&auto=format&fit=crop' },
+  { label: '커피 한 잔',  url: 'https://images.unsplash.com/photo-1442512595331-e89e73853f31?w=800&q=70&auto=format&fit=crop' },
+];
+
+// 처음 실행 시 보여 줄 예시 기록 (가상의 카페 — 지워도 됩니다)
+const SEED = [
+  { id: 's1', sample: true, name: '숲속 정원 베이커리', address: '서울 성동구 서울숲 인근', date: '2026-09-27', rating: 5,
+    photo: SAMPLE_PHOTOS[4].url, memo: '잔디 마당이 넓어서 강아지가 신나게 뛰어놀았어요',
+    review: '야외 테라스 전체 반려견 동반 가능. 기저귀 교환대 있는 화장실, 아기 의자 3개. 주말 오전 11시 전에 가면 한산해요.',
+    tags: { babyChair: true, stroller: true, pet: true }, lat: 37.5444, lng: 127.0374 },
+  { id: 's2', sample: true, name: '한옥 라떼 하우스', address: '서울 종로구 북촌로', date: '2026-09-14', rating: 4,
+    photo: SAMPLE_PHOTOS[1].url, memo: '분위기 최고, 단 입구에 계단 두 칸',
+    review: '유모차는 접어서 들어가야 함. 좌식 자리가 있어서 아기가 기어다니기 좋았음.',
+    tags: { babyChair: true, stroller: false, pet: false }, lat: 37.5826, lng: 126.9849 },
+  { id: 's3', sample: true, name: '한강뷰 브런치 카페', address: '서울 마포구 망원한강공원 근처', date: '2026-08-30', rating: 4,
+    photo: SAMPLE_PHOTOS[0].url, memo: '엘리베이터 있고 통로 넓어요. 산책 후 들르기 딱',
+    review: '반려견은 1층 테라스만 가능. 브런치 양 많음, 아기 이유식 데워 주심.',
+    tags: { babyChair: true, stroller: true, pet: true }, lat: 37.5559, lng: 126.8954 },
+];
+
+const QUICK_SEARCHES = ['애견동반 카페', '키즈카페', '유모차 카페', '베이커리 카페'];
+
+const loadCafes = () => {
+  try { const raw = localStorage.getItem(STORAGE_KEY); if (raw) return JSON.parse(raw); } catch (e) {}
+  return SEED;
+};
+const todayStr = () => { const d = new Date(); return new Date(d - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10); };
+const fmtDate = (s) => (s ? s.replace(/-/g, '.') : '');
+const isIOS = () => /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const isStandalone = () => window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+const vibrate = (ms = 8) => { try { navigator.vibrate && navigator.vibrate(ms); } catch (e) {} };
+const norm = (s = '') => s.replace(/\s+/g, '').toLowerCase();
+const regionOf = (addr = '') => addr.split(/\s+/).slice(0, 2).join(' ');
+const naverMapUrl = (name, address) => `https://map.naver.com/p/search/${encodeURIComponent(`${regionOf(address)} ${name}`.trim())}`;
+const kakaoMapUrl = (name, lat, lng) => `https://map.kakao.com/link/to/${encodeURIComponent(name)},${lat},${lng}`;
+
+/* ───────────────────────── 외부 스크립트 로더 ───────────────────────── */
+const loadScript = (src) => new Promise((ok, fail) => {
+  const s = document.createElement('script'); s.src = src; s.async = true; s.onload = ok; s.onerror = fail; document.head.appendChild(s);
+});
+let leafletPromise = null;
+const loadLeaflet = () => {
+  if (window.L) return Promise.resolve();
+  if (!leafletPromise) {
+    const css = document.createElement('link'); css.rel = 'stylesheet';
+    css.href = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css'; document.head.appendChild(css);
+    leafletPromise = loadScript('https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js');
+  }
+  return leafletPromise;
+};
+
+/* ───────────────────────── 네이버 장소 검색 ───────────────────────── */
+async function naverSearch(q) {
+  const r = await fetch(`api/search?q=${encodeURIComponent(q)}`);
+  let j = {}; try { j = await r.json(); } catch (e) {}
+  if (!r.ok) { const err = new Error(j.message || '검색에 실패했어요.'); err.code = j.error || r.status; throw err; }
+  return j.items || [];
+}
+
+function reverseArea(lat, lng) {
+  return new Promise((resolve) => {
+    try {
+      const S = window.naver && naver.maps.Service;
+      if (!S || !S.reverseGeocode) return resolve('');
+      S.reverseGeocode({ coords: new naver.maps.LatLng(lat, lng), orders: S.OrderType.LEGAL_CODE }, (status, res) => {
+        if (status !== S.Status.OK) return resolve('');
+        const r = res.v2 && res.v2.results && res.v2.results[0];
+        resolve(r ? (r.region.area3.name || r.region.area2.name || '') : '');
+      });
+      setTimeout(() => resolve(''), 3000);
+    } catch (e) { resolve(''); }
+  });
+}
+
+/* ───────────────────────── 지도 엔진 어댑터 (네이버 / 대체 지도) ───────────────────────── */
+function makeAdapter(engine, el, { center, zoom, onMapClick }) {
+  if (engine === 'naver') {
+    const N = naver.maps;
+    const map = new N.Map(el, {
+      center: new N.LatLng(center[0], center[1]), zoom,
+      zoomControl: false, scaleControl: false, mapDataControl: false,
+      logoControlOptions: { position: N.Position.BOTTOM_LEFT },
+    });
+    let markers = [];
+    if (onMapClick) N.Event.addListener(map, 'click', (e) => onMapClick(e.coord.lat(), e.coord.lng()));
+    return {
+      setMarkers(items) {
+        markers.forEach((m) => m.setMap(null));
+        markers = items.map((it) => {
+          const m = new N.Marker({
+            position: new N.LatLng(it.lat, it.lng), map, zIndex: it.z || 10,
+            icon: { content: it.html, size: new N.Size(it.w, it.h), anchor: new N.Point(it.ax, it.ay) },
+          });
+          if (it.onClick) N.Event.addListener(m, 'click', it.onClick);
+          return m;
+        });
+      },
+      focus(lat, lng, z) { map.morph(new N.LatLng(lat, lng), z || Math.max(map.getZoom(), 15)); },
+      fit(points) {
+        if (!points.length) return;
+        if (points.length === 1) { map.setCenter(new N.LatLng(points[0][0], points[0][1])); map.setZoom(15); return; }
+        const b = new N.LatLngBounds(new N.LatLng(points[0][0], points[0][1]), new N.LatLng(points[0][0], points[0][1]));
+        points.forEach((p) => b.extend(new N.LatLng(p[0], p[1])));
+        map.fitBounds(b, { top: 70, right: 40, bottom: 40, left: 40 });
+      },
+      center() { const c = map.getCenter(); return [c.lat(), c.lng()]; },
+      resize() { try { N.Event.trigger(map, 'resize'); map.autoResize && map.autoResize(); } catch (e) {} },
+      destroy() { try { map.destroy(); } catch (e) {} },
+    };
+  }
+  // 대체 지도 (네이버 키 설정 전 / 인증 실패 시)
+  const map = L.map(el, { zoomControl: false }).setView(center, zoom);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(map);
+  let markers = [];
+  if (onMapClick) map.on('click', (e) => onMapClick(e.latlng.lat, e.latlng.lng));
+  return {
+    setMarkers(items) {
+      markers.forEach((m) => m.remove());
+      markers = items.map((it) => {
+        const m = L.marker([it.lat, it.lng], {
+          icon: L.divIcon({ className: '', html: it.html, iconSize: [it.w, it.h], iconAnchor: [it.ax, it.ay] }),
+          zIndexOffset: (it.z || 10) * 10,
+        }).addTo(map);
+        if (it.onClick) m.on('click', it.onClick);
+        return m;
+      });
+    },
+    focus(lat, lng, z) { map.flyTo([lat, lng], z || Math.max(map.getZoom(), 15), { duration: 0.6 }); },
+    fit(points) {
+      if (!points.length) return;
+      if (points.length === 1) return map.setView(points[0], 15);
+      map.fitBounds(points, { padding: [50, 40], maxZoom: 15 });
+    },
+    center() { const c = map.getCenter(); return [c.lat, c.lng]; },
+    resize() { map.invalidateSize(); },
+    destroy() { map.remove(); },
+  };
+}
+
+const pinHtml = (bg, inner, size) =>
+  `<div style="width:${size}px;height:${size}px"><div class="pin" style="background:${bg}">${inner}</div></div>`;
+function savedPin(cafe, active, onClick) {
+  const size = active ? 48 : 38;
+  const bg = cafe.tags.pet ? TAGS[2].pin : cafe.tags.stroller ? TAGS[1].pin : '#F97362';
+  const inner = cafe.tags.pet ? BICHON_SVG : `<span class="emo">${cafe.tags.stroller ? '👶' : '☕'}</span>`;
+  return { id: cafe.id, lat: cafe.lat, lng: cafe.lng, html: pinHtml(bg, inner, size), w: size, h: size, ax: size / 2, ay: size, z: active ? 100 : 10, onClick };
+}
+function numberPin(n, lat, lng, active, onClick, id) {
+  const size = active ? 46 : 36;
+  return { id, lat, lng, html: pinHtml(active ? '#C4432F' : '#F97362', `<span class="num">${n}</span>`, size), w: size, h: size, ax: size / 2, ay: size, z: active ? 100 : 20, onClick };
+}
+const meDot = (lat, lng) => ({ id: 'me', lat, lng, html: '<div class="me-dot"></div>', w: 18, h: 18, ax: 9, ay: 9, z: 5 });
+
+function MapView({ engine, markers, fitKey, focus, onReady, onMapClick, initialCenter, initialZoom = 13 }) {
+  const el = useRef(null); const ad = useRef(null); const clickRef = useRef(onMapClick);
+  clickRef.current = onMapClick;
+  useEffect(() => {
+    if (!engine) return;
+    let a;
+    try {
+      a = makeAdapter(engine, el.current, { center: initialCenter || DEFAULT_CENTER, zoom: initialZoom,
+        onMapClick: (lat, lng) => clickRef.current && clickRef.current(lat, lng) });
+    } catch (e) { console.error(e); return; }
+    ad.current = a; onReady && onReady(a);
+    a.setMarkers(markers);
+    if (fitKey && markers.length) a.fit(markers.filter((m) => m.id !== 'me').map((m) => [m.lat, m.lng]));
+    setTimeout(() => a.resize(), 80);
+    return () => { a.destroy(); ad.current = null; };
+  }, [engine]);
+  useEffect(() => { ad.current && ad.current.setMarkers(markers); }, [markers]);
+  useEffect(() => {
+    if (ad.current && fitKey) { const pts = markers.filter((m) => m.id !== 'me').map((m) => [m.lat, m.lng]); pts.length && ad.current.fit(pts); }
+  }, [fitKey]);
+  useEffect(() => { if (ad.current && focus) ad.current.focus(focus.lat, focus.lng, focus.zoom); }, [focus]);
+  return (
+    <div className="absolute inset-0 z-0 bg-[#F3EDE7]">
+      <div ref={el} className="absolute inset-0" />
+      {!engine && <div className="absolute inset-0 grid place-items-center"><div className="spinner" /></div>}
+    </div>
+  );
+}
+
+/* ───────────────────────── 작은 부품 ───────────────────────── */
+function Bichon({ className = 'h-4 w-4' }) {
+  return <svg viewBox="0 0 100 100" className={className} aria-hidden="true"><use href="#bichon" /></svg>;
+}
+function TagIcon({ tag, className }) {
+  return tag.key === 'pet' ? <Bichon className={className || 'h-4 w-4'} /> : <span>{tag.emoji}</span>;
+}
+function Stars({ value, size = 'text-sm' }) {
+  return (
+    <span className={`${size} tracking-tight`} aria-label={`별점 ${value}점`}>
+      {[1, 2, 3, 4, 5].map((n) => <span key={n} className={n <= value ? 'text-honey-500' : 'text-ink-400/30'}>★</span>)}
+    </span>
+  );
+}
+function TagBadge({ tag, active, small }) {
+  return (
+    <span className={`inline-flex items-center gap-1 rounded-full ring-1 ${small ? 'px-2 py-0.5 text-[11px]' : 'px-2.5 py-1 text-xs'} font-semibold
+      ${active ? tag.on : 'bg-transparent text-ink-400/70 ring-ink-400/20 line-through decoration-ink-400/40'}`}>
+      <span className={`inline-flex ${active ? '' : 'grayscale opacity-50'}`}><TagIcon tag={tag} className={small ? 'h-3.5 w-3.5' : 'h-4 w-4'} /></span>{tag.label}
+    </span>
+  );
+}
+function Photo({ src, alt, className }) {
+  const [broken, setBroken] = useState(false);
+  useEffect(() => setBroken(false), [src]);
+  if (!src || broken) return <div className={`${className} bg-gradient-to-br from-coral-100 via-honey-50 to-sage-50 grid place-items-center text-3xl`}>☕</div>;
+  return <img src={src} alt={alt} loading="lazy" onError={() => setBroken(true)} className={`${className} object-cover`} />;
+}
+const NaverN = () => <span className="grid h-5 w-5 place-items-center rounded-[5px] bg-naver-500 text-[11px] font-black text-white">N</span>;
+
+/* ───────────────────────── 네이버 검색 입력 + 결과 ───────────────────────── */
+function SearchBox({ value, onChange, onSubmit, onFocus, loading, autoFocus, placeholder = '네이버에서 카페·장소 검색' }) {
+  const timer = useRef(null);
+  return (
+    // 폼 안에 들어가도 기록 폼이 제출되지 않도록 <form> 대신 Enter 키를 직접 처리
+    <div role="search" className="flex items-center gap-2 rounded-2xl bg-white px-3 py-2.5 shadow-card ring-1 ring-black/5">
+      <NaverN />
+      <input type="search" enterKeyHint="search" value={value} autoFocus={autoFocus} onFocus={onFocus}
+        onChange={(e) => onChange(e.target.value)} placeholder={placeholder}
+        onKeyDown={(e) => {
+          if (e.key !== 'Enter') return;
+          // 한글 조합 중 Enter: 조합이 끝난 뒤의 값으로 한 번만 검색
+          e.preventDefault(); const t = e.target; clearTimeout(timer.current);
+          timer.current = setTimeout(() => onSubmit(t.value), 40);
+        }}
+        className="min-w-0 flex-1 bg-transparent text-ink-900 outline-none placeholder:text-ink-400/80" />
+      {loading ? <div className="spinner" /> : (
+        <button type="button" onClick={() => onSubmit(value)} className="rounded-xl bg-naver-500 px-3 py-1.5 text-[13px] font-bold text-white active:scale-95">검색</button>
+      )}
+    </div>
+  );
+}
+
+function SearchResult({ item, index, active, saved, onFocus, onRecord, onOpenSaved }) {
+  return (
+    <div id={`res-${index}`} onClick={onFocus}
+      className={`rounded-3xl bg-white p-4 shadow-card transition ${active ? 'ring-2 ring-coral-400' : 'ring-1 ring-black/[.03]'}`}>
+      <div className="flex items-start gap-3">
+        <span className={`mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-full text-sm font-extrabold text-white ${active ? 'bg-coral-700' : 'bg-coral-500'}`}>{index + 1}</span>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-x-2">
+            <h3 className="text-[15px] font-bold text-ink-900">{item.name}</h3>
+            {saved && <span className="rounded-full bg-coral-50 px-2 py-0.5 text-[11px] font-bold text-coral-600">★ 기록함</span>}
+          </div>
+          <p className="text-[12px] text-ink-400">{item.category}</p>
+          <p className="mt-1 text-[13px] text-ink-700">{item.roadAddress || item.address}</p>
+        </div>
+      </div>
+      <div className="mt-3 grid grid-cols-2 gap-2">
+        {saved ? (
+          <button onClick={(e) => { e.stopPropagation(); onOpenSaved(); }} className="rounded-xl bg-coral-50 py-2.5 text-[13px] font-bold text-coral-600 active:scale-95">우리 기록 보기</button>
+        ) : (
+          <button onClick={(e) => { e.stopPropagation(); onRecord(); }} className="rounded-xl bg-coral-500 py-2.5 text-[13px] font-bold text-white active:scale-95">＋ 우리 지도에 기록</button>
+        )}
+        <a href={naverMapUrl(item.name, item.roadAddress || item.address)} target="_blank" rel="noopener" onClick={(e) => e.stopPropagation()}
+          className="flex items-center justify-center gap-1.5 rounded-xl bg-naver-500 py-2.5 text-[13px] font-bold text-white active:scale-95">네이버지도에서 보기</a>
+      </div>
+    </div>
+  );
+}
+
+function SearchNotice({ error, query }) {
+  if (!error) return null;
+  const notSet = error.code === 'NOT_CONFIGURED' || error.code === 404;
+  return (
+    <div className="rounded-2xl bg-honey-50 p-4 text-[13px] text-honey-700 ring-1 ring-honey-100">
+      {notSet ? (
+        <><b>네이버 검색이 아직 연결되지 않았어요.</b><br />README의 「네이버 연동 설정」대로 Vercel에 검색 키를 넣으면 바로 켜져요. 그 전에는 직접 입력으로 기록할 수 있어요.</>
+      ) : <><b>{error.message}</b></>}
+      {query && (
+        <a href={`https://map.naver.com/p/search/${encodeURIComponent(query)}`} target="_blank" rel="noopener"
+          className="mt-2 block font-bold text-naver-600 underline">네이버지도 앱에서 ‘{query}’ 검색하기 →</a>
+      )}
+    </div>
+  );
+}
+
+/* ───────────────────────── 카드 · 상세 ───────────────────────── */
+function CafeCard({ cafe, active, onClick }) {
+  return (
+    <button id={`card-${cafe.id}`} onClick={onClick}
+      className={`w-full text-left flex gap-3 rounded-3xl bg-white p-3 shadow-card transition active:scale-[.98] ${active ? 'ring-2 ring-coral-400' : 'ring-1 ring-black/[.03]'}`}>
+      <div className="relative shrink-0">
+        <Photo src={cafe.photo} alt={cafe.name} className="h-24 w-24 rounded-2xl" />
+        {cafe.tags.pet && <span className="absolute -bottom-1 -right-1 grid h-8 w-8 place-items-center rounded-full bg-sage-500 ring-2 ring-white"><Bichon className="h-7 w-7" /></span>}
+      </div>
+      <div className="min-w-0 flex-1 py-0.5">
+        <div className="flex items-start justify-between gap-2">
+          <h3 className="truncate text-[15px] font-bold text-ink-900">{cafe.name}</h3>
+          <span className="shrink-0 text-[11px] text-ink-400">{cafe.sample ? '예시' : fmtDate(cafe.date)}</span>
+        </div>
+        <div className="mt-0.5 flex items-center gap-1.5">
+          <Stars value={cafe.rating} size="text-[13px]" />
+          <span className="text-[12px] font-semibold text-ink-500">{cafe.rating}.0</span>
+          {cafe.category && <span className="truncate text-[11px] text-ink-400">· {cafe.category.split('>').pop()}</span>}
+        </div>
+        <p className="mt-1 line-clamp-1 text-[13px] text-ink-700">{cafe.memo || '메모 없음'}</p>
+        <div className="mt-2 flex flex-wrap gap-1">{TAGS.map((t) => <TagBadge key={t.key} tag={t} active={!!cafe.tags[t.key]} small />)}</div>
+      </div>
+    </button>
+  );
+}
+
+function DetailSheet({ cafe, onClose, onDelete, onEdit }) {
+  return (
+    <div className="fixed inset-0 z-[1000] fade-in">
+      <div className="absolute inset-0 bg-ink-900/40" onClick={onClose} />
+      <div className="absolute inset-x-0 bottom-0 mx-auto max-h-[88dvh] max-w-md overflow-y-auto no-scrollbar rounded-t-[28px] bg-cream sheet-up pb-safe">
+        <div className="relative">
+          <Photo src={cafe.photo} alt={cafe.name} className="h-56 w-full" />
+          <button onClick={onClose} aria-label="닫기" className="absolute right-3 top-3 h-9 w-9 rounded-full bg-black/40 text-lg text-white backdrop-blur active:scale-95">✕</button>
+          {cafe.tags.pet && (
+            <span className="absolute bottom-3 left-4 flex items-center gap-1.5 rounded-full bg-white/95 py-1 pl-1 pr-3 text-[12px] font-bold text-sage-700 shadow">
+              <Bichon className="h-7 w-7" /> 우리 강아지도 같이 갈 수 있어요
+            </span>
+          )}
+        </div>
+        <div className="space-y-4 p-5">
+          <div>
+            <h2 className="text-xl font-extrabold text-ink-900">{cafe.name}</h2>
+            {cafe.category && <p className="text-[12px] text-ink-400">{cafe.category}</p>}
+            <p className="mt-1 text-sm text-ink-500">📍 {cafe.address || '주소 미입력'}{cafe.date && !cafe.sample ? ` · ${fmtDate(cafe.date)} 방문` : ''}</p>
+            <div className="mt-2 flex items-center gap-2"><Stars value={cafe.rating} size="text-lg" /><b className="text-ink-700">{cafe.rating}.0</b></div>
+          </div>
+          <div className="flex flex-wrap gap-1.5">{TAGS.map((t) => <TagBadge key={t.key} tag={t} active={!!cafe.tags[t.key]} />)}</div>
+          {cafe.memo && <p className="rounded-2xl bg-coral-50 px-4 py-3 text-[15px] font-semibold text-coral-700">“{cafe.memo}”</p>}
+          {cafe.review && (
+            <div>
+              <h4 className="mb-1 text-xs font-bold uppercase tracking-wider text-ink-400">후기</h4>
+              <p className="whitespace-pre-wrap text-[15px] leading-relaxed text-ink-700">{cafe.review}</p>
+            </div>
+          )}
+          <a href={naverMapUrl(cafe.name, cafe.address)} target="_blank" rel="noopener"
+            className="flex items-center justify-center gap-2 rounded-2xl bg-naver-500 py-3.5 text-[15px] font-bold text-white active:scale-[.98]">
+            <span className="grid h-5 w-5 place-items-center rounded-[5px] bg-white text-[11px] font-black text-naver-500">N</span>
+            네이버지도에서 보기 · 리뷰 · 길찾기
+          </a>
+          <div className="grid grid-cols-2 gap-2">
+            {cafe.link
+              ? <a href={cafe.link} target="_blank" rel="noopener" className="rounded-2xl bg-white py-3 text-center text-sm font-bold text-ink-700 ring-1 ring-ink-400/20 active:scale-95">🔗 가게 홈페이지</a>
+              : <span className="hidden" />}
+            {cafe.lat != null && (
+              <a href={kakaoMapUrl(cafe.name, cafe.lat, cafe.lng)} target="_blank" rel="noopener"
+                className={`rounded-2xl bg-[#FEE500] py-3 text-center text-sm font-bold text-[#3A1D1D] active:scale-95 ${cafe.link ? '' : 'col-span-2'}`}>카카오맵 길찾기</a>
+            )}
+          </div>
+          <div className="flex gap-2 pt-1">
+            <button onClick={onEdit} className="flex-1 rounded-2xl bg-white py-3 text-sm font-bold text-ink-700 ring-1 ring-ink-400/20 active:scale-95">✏️ 수정</button>
+            <button onClick={() => { if (confirm(`'${cafe.name}' 기록을 삭제할까요?`)) onDelete(cafe.id); }}
+              className="flex-1 rounded-2xl bg-white py-3 text-sm font-bold text-coral-600 ring-1 ring-coral-100 active:scale-95">🗑 삭제</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ───────────────────────── 기록 추가/수정 폼 ───────────────────────── */
+function resizeImage(file, max = 900) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        const s = Math.min(1, max / Math.max(img.width, img.height));
+        const c = document.createElement('canvas'); c.width = img.width * s; c.height = img.height * s;
+        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+        resolve(c.toDataURL('image/jpeg', 0.72));
+      };
+      img.onerror = reject; img.src = reader.result;
+    };
+    reader.onerror = reject; reader.readAsDataURL(file);
+  });
+}
+
+function LocationPicker({ engine, value, center, onChange }) {
+  const [locating, setLocating] = useState(false);
+  const [focus, setFocus] = useState(null);
+  const markers = useMemo(() => value ? [savedPin({ id: 'pick', tags: {}, lat: value.lat, lng: value.lng }, true)] : [], [value]);
+  const useMyLocation = () => {
+    if (!navigator.geolocation) return alert('이 기기에서는 위치를 가져올 수 없어요.');
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (p) => { const ll = { lat: p.coords.latitude, lng: p.coords.longitude }; onChange(ll); setFocus({ ...ll, zoom: 16, t: Date.now() }); setLocating(false); },
+      () => { setLocating(false); alert('위치 권한을 허용하면 현재 위치로 핀을 꽂을 수 있어요.'); },
+      { enableHighAccuracy: true, timeout: 8000 });
+  };
+  return (
+    <div className="relative h-44 overflow-hidden rounded-2xl ring-1 ring-ink-400/20">
+      <MapView engine={engine} markers={markers} focus={focus} initialZoom={value ? 16 : 14}
+        initialCenter={value ? [value.lat, value.lng] : center}
+        onMapClick={(lat, lng) => { vibrate(); onChange({ lat, lng }); }} />
+      <div className="pointer-events-none absolute left-2 top-2 z-[500] rounded-full bg-white/95 px-2.5 py-1 text-[11px] font-semibold text-ink-700 shadow">
+        {value ? '📍 다른 곳을 탭하면 핀이 옮겨져요' : '지도를 탭해서 위치를 찍어 주세요'}
+      </div>
+      <button type="button" onClick={useMyLocation}
+        className="absolute bottom-2 right-2 z-[500] rounded-full bg-white px-3 py-1.5 text-xs font-bold text-coral-600 shadow active:scale-95">
+        {locating ? '찾는 중…' : '◎ 현재 위치'}
+      </button>
+    </div>
+  );
+}
+
+function PlacePicker({ searchEnabled, onPick, initialQuery = '' }) {
+  const [q, setQ] = useState(initialQuery);
+  const [state, setState] = useState({ loading: false, items: null, error: null, query: '' });
+  const run = async (query) => {
+    query = query.trim(); if (!query) return;
+    setState({ loading: true, items: null, error: null, query });
+    try { setState({ loading: false, items: await naverSearch(query), error: null, query }); }
+    catch (e) { setState({ loading: false, items: null, error: e, query }); }
+  };
+  return (
+    <div className="space-y-2">
+      <SearchBox value={q} onChange={setQ} onSubmit={run} loading={state.loading} placeholder="카페 이름 + 동네 (예: 성수 비숑카페)" />
+      {!searchEnabled && !state.error && (
+        <p className="px-1 text-[12px] text-ink-400">네이버 검색 키를 설정하면 여기서 바로 가게를 찾을 수 있어요.</p>
+      )}
+      <SearchNotice error={state.error} query={state.query} />
+      {state.items && state.items.length === 0 && (
+        <p className="rounded-2xl bg-white px-4 py-3 text-[13px] text-ink-500 ring-1 ring-ink-400/15">검색 결과가 없어요. 동네 이름을 함께 넣어 보세요.</p>
+      )}
+      {state.items && state.items.map((it, i) => (
+        <button type="button" key={i} onClick={() => { vibrate(); onPick(it); }}
+          className="flex w-full items-start gap-3 rounded-2xl bg-white p-3 text-left ring-1 ring-ink-400/15 active:scale-[.98]">
+          <span className="mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full bg-coral-500 text-xs font-extrabold text-white">{i + 1}</span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-[14px] font-bold text-ink-900">{it.name}</span>
+            <span className="block text-[12px] text-ink-400">{it.category}</span>
+            <span className="block text-[12px] text-ink-700">{it.roadAddress || it.address}</span>
+          </span>
+          <span className="self-center text-[12px] font-bold text-coral-600">선택</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function AddCafeSheet({ initial, prefill, engine, center, searchEnabled, onClose, onSave }) {
+  const [f, setF] = useState(() => initial || {
+    name: prefill ? prefill.name : '', address: prefill ? (prefill.roadAddress || prefill.address) : '',
+    category: prefill ? prefill.category : '', link: prefill ? prefill.link : '',
+    lat: prefill ? prefill.lat : null, lng: prefill ? prefill.lng : null,
+    date: todayStr(), rating: 0, photo: SAMPLE_PHOTOS[0].url, memo: '', review: '',
+    tags: { babyChair: false, stroller: false, pet: /애견|반려|펫|강아지|도그|dog/i.test(prefill ? prefill.name + prefill.category : '') },
+  });
+  const fromNaver = !!(f.category || prefill) && f.lat != null;
+  const [placeMode, setPlaceMode] = useState(initial || prefill ? 'picked' : 'search'); // search | picked | manual
+  const [photoMode, setPhotoMode] = useState(initial && initial.photo && !SAMPLE_PHOTOS.some((p) => p.url === initial.photo) ? (initial.photo.startsWith('data:') ? 'upload' : 'url') : 'sample');
+  const [err, setErr] = useState('');
+  const set = (k, v) => setF((p) => ({ ...p, [k]: v }));
+  const toggleTag = (k) => { vibrate(); setF((p) => ({ ...p, tags: { ...p.tags, [k]: !p.tags[k] } })); };
+
+  const pick = (it) => {
+    setF((p) => ({ ...p, name: it.name, address: it.roadAddress || it.address, category: it.category, link: it.link, lat: it.lat, lng: it.lng,
+      tags: { ...p.tags, pet: p.tags.pet || /애견|반려|펫|강아지|도그|dog/i.test(it.name + it.category) } }));
+    setPlaceMode('picked'); setErr('');
+  };
+  const onFile = async (e) => {
+    const file = e.target.files && e.target.files[0]; if (!file) return;
+    try { set('photo', await resizeImage(file)); } catch { alert('사진을 불러오지 못했어요.'); }
+  };
+  const submit = (e) => {
+    e.preventDefault();
+    if (!f.name.trim()) return setErr('카페를 검색해서 고르거나 이름을 입력해 주세요.');
+    if (f.lat == null) return setErr('지도에서 위치를 찍어 주세요.');
+    if (!f.rating) return setErr('별점을 골라 주세요.');
+    vibrate(15);
+    const { sample, ...rest } = f;
+    onSave({ ...rest, name: f.name.trim(), id: f.id || `c${Date.now()}` });
+  };
+
+  const label = 'mb-1.5 block text-[13px] font-bold text-ink-700';
+  const input = 'w-full rounded-2xl bg-white px-4 py-3 text-ink-900 ring-1 ring-ink-400/20 outline-none focus:ring-2 focus:ring-coral-400 placeholder:text-ink-400/70';
+
+  return (
+    <div className="fixed inset-0 z-[1000] fade-in">
+      <div className="absolute inset-0 bg-ink-900/40" onClick={onClose} />
+      <form onSubmit={submit} className="absolute inset-x-0 bottom-0 mx-auto flex max-h-[94dvh] max-w-md flex-col rounded-t-[28px] bg-cream sheet-up">
+        <div className="flex items-center justify-between border-b border-ink-400/10 px-5 py-4">
+          <button type="button" onClick={onClose} className="text-sm font-semibold text-ink-500">취소</button>
+          <h2 className="text-base font-extrabold">{initial ? '기록 수정' : '방문 기록 추가'}</h2>
+          <button type="submit" className="text-sm font-extrabold text-coral-600">저장</button>
+        </div>
+
+        <div className="flex-1 space-y-5 overflow-y-auto no-scrollbar px-5 py-5">
+          {/* 1. 장소 */}
+          <div>
+            <label className={label}>어디에 다녀왔나요? *</label>
+            {placeMode === 'search' && (
+              <>
+                <PlacePicker searchEnabled={searchEnabled} onPick={pick} />
+                <button type="button" onClick={() => setPlaceMode('manual')} className="mt-2 text-[13px] font-semibold text-ink-500 underline">검색이 안 되면 직접 입력하기</button>
+              </>
+            )}
+            {placeMode === 'picked' && (
+              <div className="rounded-2xl bg-white p-4 ring-1 ring-ink-400/15">
+                <div className="flex items-start gap-2">
+                  {fromNaver && <NaverN />}
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[15px] font-extrabold text-ink-900">{f.name}</p>
+                    {f.category && <p className="text-[12px] text-ink-400">{f.category}</p>}
+                    <p className="mt-0.5 text-[13px] text-ink-700">{f.address || '주소 없음'}</p>
+                  </div>
+                  <button type="button" onClick={() => setPlaceMode('search')} className="shrink-0 rounded-full bg-coral-50 px-3 py-1.5 text-[12px] font-bold text-coral-600">다시 찾기</button>
+                </div>
+                <button type="button" onClick={() => setPlaceMode('manual')} className="mt-2 text-[12px] font-semibold text-ink-400 underline">이름·위치 직접 고치기</button>
+              </div>
+            )}
+            {placeMode === 'manual' && (
+              <div className="space-y-3">
+                <input className={input} value={f.name} onChange={(e) => set('name', e.target.value)} placeholder="카페 이름" />
+                <input className={input} value={f.address} onChange={(e) => set('address', e.target.value)} placeholder="주소 (예: 서울 성동구 서울숲길 00)" />
+                <LocationPicker engine={engine} center={center} value={f.lat != null ? { lat: f.lat, lng: f.lng } : null}
+                  onChange={(ll) => setF((p) => ({ ...p, ...ll }))} />
+                <button type="button" onClick={() => setPlaceMode('search')} className="text-[13px] font-semibold text-naver-600 underline">← 네이버에서 검색하기</button>
+              </div>
+            )}
+          </div>
+
+          {/* 2. 날짜 · 별점 */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className={label}>방문 날짜</label>
+              <input type="date" className={input} value={f.date} max={todayStr()} onChange={(e) => set('date', e.target.value)} />
+            </div>
+            <div>
+              <label className={label}>별점 *</label>
+              <div className="flex h-[50px] items-center justify-between rounded-2xl bg-white px-2 ring-1 ring-ink-400/20">
+                {[1, 2, 3, 4, 5].map((n) => (
+                  <button type="button" key={n} onClick={() => { vibrate(); set('rating', n); }} aria-label={`${n}점`}
+                    className={`text-[26px] leading-none transition active:scale-125 ${n <= f.rating ? 'text-honey-500' : 'text-ink-400/25'}`}>★</button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* 3. 체크리스트 */}
+          <div>
+            <label className={label}>우리 가족 체크리스트</label>
+            <div className="grid grid-cols-3 gap-2">
+              {TAGS.map((t) => {
+                const on = !!f.tags[t.key];
+                return (
+                  <button type="button" key={t.key} onClick={() => toggleTag(t.key)} aria-pressed={on} data-tag={t.key}
+                    className={`relative flex flex-col items-center gap-1 rounded-2xl py-3 text-[12px] font-bold ring-1 transition active:scale-95 ${on ? t.on + ' ring-2' : 'bg-white text-ink-500 ring-ink-400/20'}`}>
+                    <span className={`absolute right-2 top-2 grid h-4 w-4 place-items-center rounded-[5px] text-[10px] ${on ? 'bg-current' : 'ring-1 ring-ink-400/40'}`}>{on && <span className="text-white">✓</span>}</span>
+                    <span className="grid h-8 place-items-center text-2xl"><TagIcon tag={t} className="h-8 w-8" /></span>{t.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* 4. 사진 */}
+          <div>
+            <label className={label}>사진</label>
+            <div className="mb-2 flex rounded-full bg-white p-1 text-[13px] font-bold ring-1 ring-ink-400/15">
+              {[['sample', '샘플'], ['upload', '내 사진'], ['url', 'URL']].map(([k, l]) => (
+                <button type="button" key={k} onClick={() => setPhotoMode(k)}
+                  className={`flex-1 rounded-full py-1.5 ${photoMode === k ? 'bg-coral-500 text-white' : 'text-ink-500'}`}>{l}</button>
+              ))}
+            </div>
+            {photoMode === 'sample' && (
+              <div className="grid grid-cols-3 gap-2">
+                {SAMPLE_PHOTOS.map((p) => (
+                  <button type="button" key={p.url} onClick={() => set('photo', p.url)}
+                    className={`relative overflow-hidden rounded-xl ${f.photo === p.url ? 'ring-[3px] ring-coral-500' : ''}`}>
+                    <Photo src={p.url} alt={p.label} className="h-20 w-full" />
+                    <span className="absolute inset-x-0 bottom-0 bg-black/40 py-0.5 text-[10px] font-semibold text-white">{p.label}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+            {photoMode === 'upload' && (
+              <label className="flex cursor-pointer items-center gap-3 rounded-2xl bg-white p-3 ring-1 ring-ink-400/30">
+                <Photo src={f.photo && f.photo.startsWith('data:') ? f.photo : null} alt="" className="h-16 w-16 rounded-xl" />
+                <span className="text-sm font-semibold text-ink-700">📷 앨범에서 고르거나 촬영하기</span>
+                <input type="file" accept="image/*" className="hidden" onChange={onFile} />
+              </label>
+            )}
+            {photoMode === 'url' && (
+              <div className="flex gap-2">
+                <input className={input} inputMode="url" value={f.photo && !f.photo.startsWith('data:') ? f.photo : ''} onChange={(e) => set('photo', e.target.value)} placeholder="https://…" />
+                <Photo src={f.photo} alt="" className="h-[50px] w-[50px] shrink-0 rounded-xl" />
+              </div>
+            )}
+          </div>
+
+          {/* 5. 메모 */}
+          <div>
+            <label className={label}>한 줄 메모</label>
+            <input className={input} maxLength={40} value={f.memo} onChange={(e) => set('memo', e.target.value)} placeholder="카드에 보일 한 줄 (40자)" />
+          </div>
+          <div>
+            <label className={label}>후기</label>
+            <textarea className={input + ' min-h-[96px] resize-none'} value={f.review} onChange={(e) => set('review', e.target.value)}
+              placeholder="수유실, 기저귀 교환대, 주차, 반려견 동반 구역 등" />
+          </div>
+          {err && <p className="rounded-xl bg-coral-50 px-3 py-2 text-sm font-semibold text-coral-700">{err}</p>}
+        </div>
+
+        <div className="border-t border-ink-400/10 bg-cream px-5 pt-3 pb-safe">
+          <button type="submit" className="mb-3 w-full rounded-2xl bg-coral-500 py-4 text-base font-extrabold text-white shadow-lg shadow-coral-500/30 active:scale-[.98]">
+            {initial ? '수정 완료' : '기록 저장하기'}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+/* ───────────────────────── 설치 안내 ───────────────────────── */
+function InstallGuide({ onClose, deferredPrompt, onInstalled }) {
+  const ios = isIOS();
+  const install = async () => {
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    if (outcome === 'accepted') onInstalled();
+  };
+  const Step = ({ n, children }) => (
+    <li className="flex items-start gap-3">
+      <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-coral-500 text-sm font-extrabold text-white">{n}</span>
+      <span className="pt-0.5 text-[15px] text-ink-700">{children}</span>
+    </li>
+  );
+  return (
+    <div className="fixed inset-0 z-[1100] fade-in">
+      <div className="absolute inset-0 bg-ink-900/40" onClick={onClose} />
+      <div className="absolute inset-x-0 bottom-0 mx-auto max-w-md rounded-t-[28px] bg-cream p-6 sheet-up pb-safe">
+        <div className="mb-4 flex items-center gap-3">
+          <img src="icons/icon-192.png" alt="" className="h-14 w-14 rounded-2xl shadow" />
+          <div>
+            <h2 className="text-lg font-extrabold">홈 화면에 앱으로 추가</h2>
+            <p className="text-sm text-ink-500">주소창 없이 전체 화면으로, 오프라인에서도 열려요</p>
+          </div>
+        </div>
+        {deferredPrompt ? (
+          <button onClick={install} className="mb-3 w-full rounded-2xl bg-coral-500 py-4 font-extrabold text-white active:scale-[.98]">지금 설치하기</button>
+        ) : ios ? (
+          <ol className="mb-4 space-y-3">
+            <Step n="1"><b>Safari</b>에서 열어 주세요 (카톡·인스타 내부 브라우저에선 안 돼요)</Step>
+            <Step n="2">아래쪽 <b>공유 버튼</b> <span className="inline-block rounded-md bg-white px-1.5 ring-1 ring-ink-400/20">⬆︎</span> 을 눌러요</Step>
+            <Step n="3">목록을 내려서 <b>‘홈 화면에 추가’</b> → <b>추가</b></Step>
+          </ol>
+        ) : (
+          <ol className="mb-4 space-y-3">
+            <Step n="1"><b>Chrome / 삼성 인터넷</b>에서 열어 주세요</Step>
+            <Step n="2">오른쪽 위(삼성은 아래) <b>⋮ 메뉴</b>를 눌러요</Step>
+            <Step n="3"><b>‘홈 화면에 추가’</b> 또는 <b>‘앱 설치’</b>를 선택해요</Step>
+          </ol>
+        )}
+        <button onClick={onClose} className="mb-3 w-full rounded-2xl bg-white py-3.5 text-sm font-bold text-ink-500 ring-1 ring-ink-400/20">나중에</button>
+      </div>
+    </div>
+  );
+}
+
+/* ───────────────────────── 앱 ───────────────────────── */
+function App() {
+  const [cafes, setCafes] = useState(loadCafes);
+  const [config, setConfig] = useState({ naverMapKeyId: '', searchEnabled: false });
+  const [engine, setEngine] = useState(null); // null(로딩) | 'naver' | 'leaflet'
+  const [filters, setFilters] = useState({ pet: false, stroller: false, babyChair: false });
+  const [selectedId, setSelectedId] = useState(null);
+  const [detailId, setDetailId] = useState(null);
+  const [editing, setEditing] = useState(null); // null | {mode:'new', prefill?} | cafe
+  const [mapOpen, setMapOpen] = useState(true);
+  const [toast, setToast] = useState('');
+  const [deferredPrompt, setDeferredPrompt] = useState(null);
+  const [showInstall, setShowInstall] = useState(false);
+  const [standalone, setStandalone] = useState(isStandalone());
+  const [focus, setFocus] = useState(null);
+  const [me, setMe] = useState(null);
+  const [fitKey, setFitKey] = useState(1);
+  // 네이버 검색 상태
+  const [q, setQ] = useState('');
+  const [searchFocused, setSearchFocused] = useState(false);
+  const [search, setSearch] = useState(null); // null | {query, loading, items, error}
+  const [activeRes, setActiveRes] = useState(null);
+  const [area, setArea] = useState('');
+  const adapterRef = useRef(null);
+
+  const flash = (msg, ms = 2400) => { setToast(msg); setTimeout(() => setToast(''), ms); };
+
+  // 설정 불러오기 → 네이버 지도 로드 (실패하면 대체 지도)
+  useEffect(() => {
+    (async () => {
+      let cfg = { naverMapKeyId: '', searchEnabled: false };
+      try {
+        const r = await fetch('api/config', { cache: 'no-store' });
+        if (r.ok && (r.headers.get('content-type') || '').includes('json')) cfg = await r.json();
+      } catch (e) {}
+      setConfig(cfg);
+      const fallback = async (why) => { await loadLeaflet(); setEngine('leaflet'); if (why) flash(why, 4500); };
+      if (cfg.naverMapKeyId) {
+        window.navermap_authFailure = () => fallback('네이버 지도 인증 실패: 네이버 클라우드에 등록한 웹 서비스 URL을 확인해 주세요');
+        try {
+          await loadScript(`https://oapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=${encodeURIComponent(cfg.naverMapKeyId)}&submodules=geocoder`);
+          if (window.naver && naver.maps) { setEngine('naver'); return; }
+        } catch (e) {}
+        return fallback('네이버 지도를 불러오지 못해 기본 지도로 보여드려요');
+      }
+      fallback();
+    })();
+  }, []);
+
+  useEffect(() => { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(cafes)); } catch (e) { flash('저장 공간이 부족해요. 사진 용량을 줄여 주세요.'); } }, [cafes]);
+
+  // 설치 프롬프트(안드로이드/크롬) + 첫 방문 안내
+  useEffect(() => {
+    const onPrompt = (e) => { e.preventDefault(); setDeferredPrompt(e); };
+    const onInstalled = () => { setStandalone(true); setShowInstall(false); flash('홈 화면에 설치됐어요! 🎉'); };
+    window.addEventListener('beforeinstallprompt', onPrompt);
+    window.addEventListener('appinstalled', onInstalled);
+    let dismissed = false; try { dismissed = localStorage.getItem('install-dismissed') === '1'; } catch (e) {}
+    const t = !isStandalone() && !dismissed ? setTimeout(() => setShowInstall(true), 2500) : null;
+    return () => { window.removeEventListener('beforeinstallprompt', onPrompt); window.removeEventListener('appinstalled', onInstalled); clearTimeout(t); };
+  }, []);
+
+  const visible = useMemo(() =>
+    cafes.filter((c) => Object.entries(filters).every(([k, on]) => !on || c.tags[k]))
+      .sort((a, b) => (b.date || '').localeCompare(a.date || '')), [cafes, filters]);
+
+  useEffect(() => { if (selectedId && !visible.some((c) => c.id === selectedId)) setSelectedId(null); }, [visible]);
+  useEffect(() => { if (adapterRef.current) setTimeout(() => adapterRef.current && adapterRef.current.resize(), 320); }, [mapOpen]);
+
+  const savedByName = useMemo(() => {
+    const m = {}; cafes.forEach((c) => { m[norm(c.name)] = c; }); return m;
+  }, [cafes]);
+
+  const selectSaved = useCallback((id, from) => {
+    vibrate(); setSelectedId(id);
+    const c = cafes.find((x) => x.id === id);
+    if (c && c.lat != null) setFocus({ lat: c.lat, lng: c.lng, t: Date.now() });
+    if (from === 'map') { const el = document.getElementById(`card-${id}`); el && el.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }
+  }, [cafes]);
+
+  const selectResult = useCallback((i, from) => {
+    vibrate(); setActiveRes(i);
+    const it = search && search.items && search.items[i];
+    if (it) setFocus({ lat: it.lat, lng: it.lng, zoom: 16, t: Date.now() });
+    if (from === 'map') { const el = document.getElementById(`res-${i}`); el && el.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }
+  }, [search]);
+
+  const markers = useMemo(() => {
+    const list = search && search.items
+      ? search.items.map((it, i) => numberPin(i + 1, it.lat, it.lng, i === activeRes, () => selectResult(i, 'map'), `r${i}`))
+      : visible.filter((c) => c.lat != null).map((c) => savedPin(c, c.id === selectedId, () => selectSaved(c.id, 'map')));
+    return me ? [...list, meDot(me.lat, me.lng)] : list;
+  }, [visible, selectedId, search, activeRes, me, selectSaved, selectResult]);
+
+  // 검색창을 열 때 지도 중심 동네 이름 (네이버 역지오코딩)
+  const onSearchFocus = async () => {
+    setSearchFocused(true);
+    if (engine === 'naver' && adapterRef.current) {
+      const [lat, lng] = adapterRef.current.center();
+      const name = await reverseArea(lat, lng); if (name) setArea(name);
+    }
+  };
+
+  const runSearch = async (query) => {
+    query = (query || '').trim(); if (!query) return;
+    setQ(query); setSearchFocused(false); setActiveRes(null); setSelectedId(null);
+    document.activeElement && document.activeElement.blur && document.activeElement.blur();
+    setSearch({ query, loading: true, items: null, error: null });
+    try {
+      const items = await naverSearch(query);
+      setSearch({ query, loading: false, items, error: null });
+      setFitKey((k) => k + 1); if (!mapOpen) setMapOpen(true);
+    } catch (e) { setSearch({ query, loading: false, items: null, error: e }); }
+  };
+  const closeSearch = () => { setSearch(null); setQ(''); setActiveRes(null); setSearchFocused(false); setFitKey((k) => k + 1); };
+
+  const locateMe = () => {
+    if (!navigator.geolocation) return flash('이 기기에서는 위치를 쓸 수 없어요');
+    navigator.geolocation.getCurrentPosition(
+      (p) => { const ll = { lat: p.coords.latitude, lng: p.coords.longitude }; setMe(ll); setFocus({ ...ll, zoom: 15, t: Date.now() }); },
+      () => flash('위치 권한을 허용하면 내 주변을 볼 수 있어요'), { enableHighAccuracy: true, timeout: 8000 });
+  };
+
+  const onCardClick = (id) => { if (selectedId === id || !mapOpen) setDetailId(id); selectSaved(id, 'list'); };
+
+  const save = (cafe) => {
+    const isNew = !cafes.some((c) => c.id === cafe.id);
+    setCafes((prev) => isNew ? [cafe, ...prev] : prev.map((c) => (c.id === cafe.id ? cafe : c)));
+    setEditing(null); setDetailId(null); setSearch(null); setQ(''); setActiveRes(null);
+    setFilters({ pet: false, stroller: false, babyChair: false });
+    setTimeout(() => { setSelectedId(cafe.id); setFocus({ lat: cafe.lat, lng: cafe.lng, zoom: 15, t: Date.now() }); }, 60);
+    flash(isNew ? '우리 지도에 저장했어요 ☕' : '수정했어요');
+  };
+  const remove = (id) => { setCafes((p) => p.filter((c) => c.id !== id)); setDetailId(null); setSelectedId(null); flash('삭제했어요'); };
+  const toggleFilter = (k) => { vibrate(); setFilters((p) => ({ ...p, [k]: !p[k] })); setSelectedId(null); setFitKey((x) => x + 1); };
+
+  const detail = cafes.find((c) => c.id === detailId);
+  const center = adapterRef.current ? adapterRef.current.center() : DEFAULT_CENTER;
+  const inSearch = !!search;
+
+  return (
+    <div className="mx-auto flex h-[100dvh] max-w-md flex-col overflow-hidden bg-cream">
+      {/* 헤더 */}
+      <header className="z-20 bg-cream/95 pt-safe backdrop-blur">
+        <div className="flex items-center justify-between px-5 pt-3 pb-2">
+          <div className="flex items-center gap-2.5">
+            <span className="grid h-11 w-11 place-items-center rounded-2xl bg-coral-100"><Bichon className="h-10 w-10" /></span>
+            <div>
+              <p className="text-[12px] font-semibold text-ink-400">아기랑 · 우리 강아지랑</p>
+              <h1 className="text-[20px] font-extrabold leading-tight tracking-tight text-ink-900">우리가족 나들이 지도</h1>
+            </div>
+          </div>
+          {!standalone && (
+            <button onClick={() => setShowInstall(true)} className="rounded-full bg-coral-50 px-3 py-2 text-[12px] font-bold text-coral-600 ring-1 ring-coral-100 active:scale-95">📲 앱 설치</button>
+          )}
+        </div>
+
+        {/* 네이버 검색 */}
+        <div className="px-4 pb-2">
+          <div className="flex items-center gap-2">
+            <div className="min-w-0 flex-1">
+              <SearchBox value={q} onChange={setQ} onSubmit={runSearch} onFocus={onSearchFocus} loading={search && search.loading} />
+            </div>
+            {(inSearch || searchFocused) && (
+              <button onClick={closeSearch} className="shrink-0 px-1 text-[14px] font-bold text-ink-500">취소</button>
+            )}
+          </div>
+          {searchFocused && !inSearch && (
+            <div className="mt-2 flex gap-2 overflow-x-auto no-scrollbar fade-in">
+              {QUICK_SEARCHES.map((s) => {
+                const query = area ? `${area} ${s}` : s;
+                return (
+                  <button key={s} onMouseDown={(e) => e.preventDefault()} onClick={() => runSearch(query)}
+                    className="shrink-0 rounded-full bg-white px-3 py-1.5 text-[12px] font-bold text-ink-700 ring-1 ring-ink-400/20 active:scale-95">
+                    {s === '애견동반 카페' ? <span className="inline-flex items-center gap-1"><Bichon className="h-4 w-4" />{query}</span> : query}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* 저장한 곳 필터 */}
+        {!inSearch && (
+          <div className="flex gap-2 overflow-x-auto no-scrollbar px-4 pb-3">
+            {[
+              { k: 'pet', l: '반려견 동반만', c: 'bg-sage-500', icon: <Bichon className="h-5 w-5" /> },
+              { k: 'stroller', l: '유모차 가능만', c: 'bg-sky2-500', icon: '👶' },
+              { k: 'babyChair', l: '아기 의자', c: 'bg-honey-500', icon: '🪑' },
+            ].map(({ k, l, c, icon }) => (
+              <button key={k} onClick={() => toggleFilter(k)} aria-pressed={filters[k]}
+                className={`flex shrink-0 items-center gap-1.5 rounded-full px-3.5 py-2 text-[13px] font-bold transition active:scale-95 ${filters[k] ? `${c} text-white shadow-md` : 'bg-white text-ink-700 ring-1 ring-ink-400/20'}`}>
+                {icon}{l}
+              </button>
+            ))}
+          </div>
+        )}
+      </header>
+
+      {/* 지도 */}
+      <section className={`relative shrink-0 transition-[height] duration-300 ${mapOpen ? 'h-[36dvh]' : 'h-0'}`}>
+        <MapView engine={engine} markers={markers} fitKey={fitKey} focus={focus} onReady={(a) => { adapterRef.current = a; }} />
+        {mapOpen && (
+          <button onClick={locateMe} aria-label="내 위치"
+            className="absolute bottom-6 right-3 z-[500] grid h-10 w-10 place-items-center rounded-full bg-white text-lg text-sky2-500 shadow-card active:scale-95">◎</button>
+        )}
+        {engine === 'leaflet' && mapOpen && (
+          <span className="absolute left-2 top-2 z-[500] rounded-full bg-white/90 px-2 py-0.5 text-[10px] font-semibold text-ink-500 shadow">기본 지도 · 네이버 지도 설정 전</span>
+        )}
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 z-[400] h-6 bg-gradient-to-t from-cream to-transparent" />
+      </section>
+
+      {/* 하단 패널 */}
+      <section className="relative z-10 -mt-3 flex min-h-0 flex-1 flex-col rounded-t-[26px] bg-cream">
+        <button onClick={() => setMapOpen((v) => !v)} className="flex w-full flex-col items-center pb-1 pt-2" aria-label="지도 접기/펼치기">
+          <span className="h-1.5 w-10 rounded-full bg-ink-400/30" />
+        </button>
+
+        {inSearch ? (
+          <>
+            <div className="flex items-baseline justify-between px-5 pb-2">
+              <h2 className="truncate text-[15px] font-extrabold text-ink-900"><span className="text-naver-600">N</span> ‘{search.query}’ 검색 결과</h2>
+              <a href={`https://map.naver.com/p/search/${encodeURIComponent(search.query)}`} target="_blank" rel="noopener" className="shrink-0 text-[12px] font-bold text-naver-600">더 보기 →</a>
+            </div>
+            <div className="flex-1 space-y-3 overflow-y-auto no-scrollbar px-4 pb-32">
+              {search.loading && <div className="grid place-items-center py-10"><div className="spinner" /></div>}
+              <SearchNotice error={search.error} query={search.query} />
+              {search.items && search.items.length === 0 && (
+                <div className="mt-6 text-center text-ink-500"><p className="font-bold text-ink-700">검색 결과가 없어요</p><p className="text-sm">동네 이름을 함께 넣어 보세요 (예: 망원동 애견동반 카페)</p></div>
+              )}
+              {search.items && search.items.map((it, i) => {
+                const saved = savedByName[norm(it.name)];
+                return (
+                  <SearchResult key={i} item={it} index={i} active={i === activeRes} saved={!!saved}
+                    onFocus={() => selectResult(i, 'list')}
+                    onRecord={() => setEditing({ mode: 'new', prefill: it })}
+                    onOpenSaved={() => setDetailId(saved.id)} />
+                );
+              })}
+              {search.items && search.items.length > 0 && (
+                <p className="pt-1 text-center text-[12px] text-ink-400">네이버 검색은 한 번에 최대 5곳까지 보여줘요 · 더 많은 곳은 ‘더 보기’</p>
+              )}
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="flex items-baseline justify-between px-5 pb-2">
+              <h2 className="text-[15px] font-extrabold text-ink-900">
+                우리가 다녀온 곳 <span className="text-coral-500">{visible.length}</span>
+                {visible.length !== cafes.length && <span className="font-semibold text-ink-400"> / {cafes.length}</span>}
+              </h2>
+              <button onClick={() => setMapOpen((v) => !v)} className="text-[12px] font-bold text-ink-500">{mapOpen ? '지도 접기 ▴' : '지도 펼치기 ▾'}</button>
+            </div>
+            <div className="flex-1 space-y-3 overflow-y-auto no-scrollbar px-4 pb-32">
+              {visible.map((c) => <CafeCard key={c.id} cafe={c} active={c.id === selectedId} onClick={() => onCardClick(c.id)} />)}
+              {visible.length === 0 && (
+                <div className="mt-8 flex flex-col items-center text-center text-ink-500">
+                  <Bichon className="h-16 w-16" />
+                  <p className="mt-3 font-bold text-ink-700">조건에 맞는 곳이 아직 없어요</p>
+                  <p className="text-sm">위 검색창에서 네이버로 찾아 기록해 보세요</p>
+                </div>
+              )}
+              {visible.length > 0 && <p className="pt-2 text-center text-[12px] text-ink-400">카드를 한 번 더 누르면 상세 정보가 열려요</p>}
+            </div>
+          </>
+        )}
+      </section>
+
+      {/* 추가 버튼 */}
+      {!inSearch && (
+        <button onClick={() => { vibrate(); setEditing({ mode: 'new' }); }}
+          className="fixed bottom-safe left-1/2 z-30 flex -translate-x-1/2 items-center gap-2 rounded-full bg-coral-500 px-6 py-4 text-[15px] font-extrabold text-white shadow-xl shadow-coral-500/40 active:scale-95">
+          <span className="text-xl leading-none">＋</span> 방문 기록
+        </button>
+      )}
+
+      {toast && (
+        <div className="fixed left-1/2 top-[calc(env(safe-area-inset-top)+12px)] z-[1200] w-max max-w-[90vw] -translate-x-1/2 rounded-2xl bg-ink-900/90 px-4 py-2.5 text-center text-sm font-semibold text-white shadow-lg fade-in">{toast}</div>
+      )}
+
+      {detail && <DetailSheet cafe={detail} onClose={() => setDetailId(null)} onDelete={remove} onEdit={() => { setEditing(detail); setDetailId(null); }} />}
+      {editing && (
+        <AddCafeSheet engine={engine} center={center} searchEnabled={config.searchEnabled}
+          initial={editing.mode === 'new' ? null : editing} prefill={editing.mode === 'new' ? editing.prefill : null}
+          onClose={() => setEditing(null)} onSave={save} />
+      )}
+      {showInstall && (
+        <InstallGuide deferredPrompt={deferredPrompt} onInstalled={() => setShowInstall(false)}
+          onClose={() => { setShowInstall(false); try { localStorage.setItem('install-dismissed', '1'); } catch (e) {} }} />
+      )}
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+
+// 서비스 워커 등록 (https 또는 localhost에서만 동작)
+if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+  const reg = () => navigator.serviceWorker.register('./sw.js').catch(() => {});
+  document.readyState === 'complete' ? reg() : window.addEventListener('load', reg);
+}
+  </script>
+</body>
+</html>
