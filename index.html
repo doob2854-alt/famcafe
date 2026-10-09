@@ -346,6 +346,10 @@ function savedPin(cafe, active, onClick) {
   const inner = cafe.tags.pet ? BICHON_SVG : `<span class="emo">${cafe.tags.stroller ? '👶' : '☕'}</span>`;
   return { id: cafe.id, lat: cafe.lat, lng: cafe.lng, html: pinHtml(bg, inner, size), w: size, h: size, ax: size / 2, ay: size, z: active ? 100 : 10, onClick };
 }
+function wishPin(cafe, active, onClick) {
+  const size = active ? 46 : 36;
+  return { id: cafe.id, lat: cafe.lat, lng: cafe.lng, html: pinHtml(active ? '#C93D6E' : '#E8618C', '<span class="emo" style="color:#fff">♥</span>', size), w: size, h: size, ax: size / 2, ay: size, z: active ? 100 : 15, onClick };
+}
 function numberPin(n, lat, lng, active, onClick, id) {
   const size = active ? 46 : 36;
   return { id, lat, lng, html: pinHtml(active ? '#C4432F' : '#F97362', `<span class="num">${n}</span>`, size), w: size, h: size, ax: size / 2, ay: size, z: active ? 100 : 20, onClick };
@@ -453,7 +457,7 @@ function SearchBox({ value, onChange, onSubmit, onFocus, loading, autoFocus, pla
   );
 }
 
-function SearchResult({ item, index, active, saved, onFocus, onRecord, onOpenSaved }) {
+function SearchResult({ item, index, active, saved, wished, onFocus, onRecord, onOpenSaved, onWish }) {
   return (
     <div id={`res-${index}`} onClick={onFocus}
       className={`rounded-3xl bg-white p-4 shadow-card transition ${active ? 'ring-2 ring-coral-400' : 'ring-1 ring-black/[.03]'}`}>
@@ -464,6 +468,7 @@ function SearchResult({ item, index, active, saved, onFocus, onRecord, onOpenSav
             <h3 className="text-[15px] font-bold text-ink-900">{item.name}</h3>
             {item.region && <span className="rounded-full bg-sky2-50 px-2 py-0.5 text-[11px] font-bold text-sky2-700">📍 {item.region}</span>}
             {saved && <span className="rounded-full bg-coral-50 px-2 py-0.5 text-[11px] font-bold text-coral-600">★ 기록함</span>}
+            {!saved && wished && <span className="rounded-full bg-pink-50 px-2 py-0.5 text-[11px] font-bold text-pink-600">♥ 가고 싶은 곳</span>}
           </div>
           <p className="text-[12px] text-ink-400">{item.category}</p>
           <p className="mt-1 text-[13px] text-ink-700">{item.roadAddress || item.address}</p>
@@ -471,13 +476,18 @@ function SearchResult({ item, index, active, saved, onFocus, onRecord, onOpenSav
       </div>
       <div className="mt-3 grid grid-cols-2 gap-2">
         {saved ? (
-          <button onClick={(e) => { e.stopPropagation(); onOpenSaved(); }} className="rounded-xl bg-coral-50 py-2.5 text-[13px] font-bold text-coral-600 active:scale-95">우리 기록 보기</button>
+          <button onClick={(e) => { e.stopPropagation(); onOpenSaved(); }} className="col-span-2 rounded-xl bg-coral-50 py-2.5 text-[13px] font-bold text-coral-600 active:scale-95">우리 기록 보기</button>
         ) : (
-          <button onClick={(e) => { e.stopPropagation(); onRecord(); }} className="rounded-xl bg-coral-500 py-2.5 text-[13px] font-bold text-white active:scale-95">＋ 우리 지도에 기록</button>
+          <>
+            <button onClick={(e) => { e.stopPropagation(); onWish(); }} aria-pressed={!!wished}
+              className={`rounded-xl py-2.5 text-[13px] font-bold active:scale-95 ${wished ? 'bg-pink-500 text-white' : 'bg-pink-50 text-pink-600 ring-1 ring-pink-100'}`}>
+              {wished ? '♥ 담았어요' : '♡ 가고 싶어요'}</button>
+            <button onClick={(e) => { e.stopPropagation(); onRecord(); }} className="rounded-xl bg-coral-500 py-2.5 text-[13px] font-bold text-white active:scale-95">＋ 다녀왔어요</button>
+          </>
         )}
-        <a href={naverMapUrl(item.name, item.roadAddress || item.address)} target="_blank" rel="noopener" onClick={(e) => e.stopPropagation()}
-          className="flex items-center justify-center gap-1.5 rounded-xl bg-naver-500 py-2.5 text-[13px] font-bold text-white active:scale-95">네이버지도에서 보기</a>
       </div>
+      <a href={naverMapUrl(item.name, item.roadAddress || item.address)} target="_blank" rel="noopener" onClick={(e) => e.stopPropagation()}
+        className="mt-2 block text-right text-[12px] font-bold text-naver-600">네이버지도에서 보기 →</a>
     </div>
   );
 }
@@ -499,6 +509,29 @@ function SearchNotice({ error, query }) {
 }
 
 /* ───────────────────────── 카드 · 상세 ───────────────────────── */
+function WishCard({ wish, active, onClick, onVisit, onRemove }) {
+  return (
+    <div id={`card-${wish.id}`} onClick={onClick}
+      className={`flex gap-3 rounded-3xl bg-white p-3 shadow-card transition ${active ? 'ring-2 ring-pink-400' : 'ring-1 ring-black/[.03]'}`}>
+      <Photo src={wish.photo} fallback={wish.photoThumb} alt={wish.name} className="h-20 w-20 shrink-0 rounded-2xl" />
+      <div className="min-w-0 flex-1">
+        <div className="flex items-start justify-between gap-2">
+          <h3 className="truncate text-[15px] font-bold text-ink-900">{wish.name}</h3>
+          <button onClick={(e) => { e.stopPropagation(); onRemove(); }} aria-label="가고 싶은 곳에서 빼기"
+            className="-mr-1 -mt-1 grid h-8 w-8 shrink-0 place-items-center rounded-full text-[18px] text-pink-500 active:scale-90">♥</button>
+        </div>
+        <p className="-mt-1 truncate text-[12px] text-ink-400">{(wish.category || '').split('>').pop()}{wish.addedBy ? ` · ${wish.addedBy}가 담음` : ''}</p>
+        <div className="mt-2 flex gap-1.5">
+          <a href={naverMapUrl(wish.name, wish.address)} target="_blank" rel="noopener" onClick={(e) => e.stopPropagation()}
+            className="flex-1 rounded-xl bg-naver-500/10 py-2 text-center text-[12px] font-bold text-naver-600 active:scale-95">네이버지도</a>
+          <button onClick={(e) => { e.stopPropagation(); onVisit(); }}
+            className="flex-1 rounded-xl bg-coral-500 py-2 text-[12px] font-bold text-white active:scale-95">✓ 다녀왔어요</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function CafeCard({ cafe, active, onClick }) {
   return (
     <button id={`card-${cafe.id}`} onClick={onClick}
@@ -710,11 +743,12 @@ function PlacePicker({ searchEnabled, onPick, initialQuery = '' }) {
 
 function AddCafeSheet({ initial, prefill, engine, center, searchEnabled, onClose, onSave }) {
   const [f, setF] = useState(() => initial || {
+    ...(prefill && prefill.id ? { id: prefill.id, addedBy: prefill.addedBy } : {}),
     name: prefill ? prefill.name : '', address: prefill ? (prefill.roadAddress || prefill.address) : '',
     category: prefill ? prefill.category : '', link: prefill ? prefill.link : '',
     lat: prefill ? prefill.lat : null, lng: prefill ? prefill.lng : null,
-    date: todayStr(), rating: 0, photo: '', photoThumb: '', memo: '', review: '',
-    tags: { babyChair: false, stroller: false, pet: /애견|반려|펫|강아지|도그|dog/i.test(prefill ? prefill.name + prefill.category : '') },
+    date: todayStr(), rating: 0, photo: (prefill && prefill.photo) || '', photoThumb: (prefill && prefill.photoThumb) || '', memo: '', review: '',
+    tags: { babyChair: false, stroller: false, pet: /애견|반려|펫|강아지|도그|dog/i.test(prefill ? prefill.name + prefill.category : ''), ...((prefill && prefill.tags) || {}) },
   });
   const fromNaver = !!(f.category || prefill) && f.lat != null;
   const [placeMode, setPlaceMode] = useState(initial || prefill ? 'picked' : 'search'); // search | picked | manual
@@ -742,7 +776,7 @@ function AddCafeSheet({ initial, prefill, engine, center, searchEnabled, onClose
     if (!f.rating) return setErr('별점을 골라 주세요.');
     vibrate(15);
     const { sample, ...rest } = f;
-    onSave({ ...rest, name: f.name.trim(), id: f.id || `c${Date.now()}` });
+    onSave({ ...rest, wish: false, name: f.name.trim(), id: f.id || `c${Date.now()}` });
   };
 
   const label = 'mb-1.5 block text-[13px] font-bold text-ink-700';
@@ -1252,6 +1286,7 @@ function App() {
   const [detailId, setDetailId] = useState(null);
   const [editing, setEditing] = useState(null); // null | {mode:'new', prefill?} | cafe
   const [mapOpen, setMapOpen] = useState(true);
+  const [tab, setTab] = useState('visited'); // visited | wish
   const [toast, setToast] = useState('');
   const [deferredPrompt, setDeferredPrompt] = useState(null);
   const [showInstall, setShowInstall] = useState(false);
@@ -1412,16 +1447,21 @@ function App() {
   }, []);
 
   const live = useMemo(() => cafes.filter((c) => !c.deleted), [cafes]);
+  const visited = useMemo(() => live.filter((c) => !c.wish), [live]);
+  const wishes = useMemo(() => live.filter((c) => c.wish).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)), [live]);
   const visible = useMemo(() =>
-    live.filter((c) => Object.entries(filters).every(([k, on]) => !on || c.tags[k]))
-      .sort((a, b) => (b.date || '').localeCompare(a.date || '')), [live, filters]);
+    visited.filter((c) => Object.entries(filters).every(([k, on]) => !on || c.tags[k]))
+      .sort((a, b) => (b.date || '').localeCompare(a.date || '')), [visited, filters]);
 
   useEffect(() => { if (selectedId && !visible.some((c) => c.id === selectedId)) setSelectedId(null); }, [visible]);
   useEffect(() => { if (adapterRef.current) setTimeout(() => adapterRef.current && adapterRef.current.resize(), 320); }, [mapOpen]);
 
   const savedByName = useMemo(() => {
-    const m = {}; live.forEach((c) => { m[norm(c.name)] = c; }); return m;
-  }, [live]);
+    const m = {}; visited.forEach((c) => { m[norm(c.name)] = c; }); return m;
+  }, [visited]);
+  const wishByName = useMemo(() => {
+    const m = {}; wishes.forEach((c) => { m[norm(c.name)] = c; }); return m;
+  }, [wishes]);
 
   const selectSaved = useCallback((id, from) => {
     vibrate(); setSelectedId(id);
@@ -1440,9 +1480,34 @@ function App() {
   const markers = useMemo(() => {
     const list = search && search.items
       ? search.items.map((it, i) => numberPin(i + 1, it.lat, it.lng, i === activeRes, () => selectResult(i, 'map'), `r${i}`))
-      : visible.filter((c) => c.lat != null).map((c) => savedPin(c, c.id === selectedId, () => selectSaved(c.id, 'map')));
+      : tab === 'wish'
+        ? wishes.filter((c) => c.lat != null).map((c) => wishPin(c, c.id === selectedId, () => selectSaved(c.id, 'map')))
+        : visible.filter((c) => c.lat != null).map((c) => savedPin(c, c.id === selectedId, () => selectSaved(c.id, 'map')));
     return me ? [...list, meDot(me.lat, me.lng)] : list;
-  }, [visible, selectedId, search, activeRes, me, selectSaved, selectResult]);
+  }, [visible, wishes, tab, selectedId, search, activeRes, me, selectSaved, selectResult]);
+
+  /* ── 가고 싶은 곳 ── */
+  const addWish = async (it) => {
+    vibrate(12);
+    const id = `w${Date.now()}`;
+    const w = { id, wish: true, name: it.name, address: it.roadAddress || it.address, category: it.category, link: it.link,
+      lat: it.lat, lng: it.lng, photo: '', photoThumb: '', updatedAt: Date.now(), addedBy: family ? family.me : '',
+      tags: { pet: /애견|반려|펫|강아지|도그|dog/i.test(it.name + it.category) } };
+    setCafes((prev) => [w, ...prev]); markDirty();
+    flash('♥ 가고 싶은 곳에 담았어요');
+    // 사진은 뒤에서 조용히 찾아 넣기
+    try {
+      const imgs = await naverImages(photoQueryOf(w.name, w.address));
+      if (imgs[0]) { setCafes((prev) => prev.map((c) => (c.id === id ? { ...c, photo: imgs[0].url || imgs[0].thumb, photoThumb: imgs[0].thumb || '', photoTried: true, updatedAt: Date.now() } : c))); markDirty(); }
+    } catch (e) {}
+  };
+  const removeWish = (id) => {
+    vibrate(); setCafes((p) => p.map((c) => (c.id === id ? { id, deleted: true, updatedAt: Date.now() } : c))); markDirty();
+    if (selectedId === id) setSelectedId(null);
+    flash('가고 싶은 곳에서 뺐어요');
+  };
+  const toggleWish = (it) => { const w = wishByName[norm(it.name)]; w ? removeWish(w.id) : addWish(it); };
+  const visitWish = (w) => setEditing({ mode: 'new', prefill: { ...w, roadAddress: w.address } });
 
   // 검색창을 열 때 지도 중심 동네 이름 (네이버 역지오코딩)
   const onSearchFocus = async () => {
@@ -1506,6 +1571,7 @@ function App() {
   const onCardClick = (id) => { if (selectedId === id || !mapOpen) setDetailId(id); selectSaved(id, 'list'); };
 
   const save = (input) => {
+    const wasWish = live.some((c) => c.id === input.id && c.wish);
     const isNew = !live.some((c) => c.id === input.id);
     const cafe = { ...input, updatedAt: Date.now(), ...(isNew ? { addedBy: family ? family.me : '' } : {}) };
     setCafes((prev) => isNew ? [cafe, ...prev] : prev.map((c) => (c.id === cafe.id ? cafe : c)));
@@ -1513,7 +1579,8 @@ function App() {
     setEditing(null); setDetailId(null); setSearch(null); setQ(''); setActiveRes(null);
     setFilters({ pet: false, stroller: false, babyChair: false });
     setTimeout(() => { setSelectedId(cafe.id); setFocus({ lat: cafe.lat, lng: cafe.lng, zoom: 15, t: Date.now() }); }, 60);
-    flash(isNew ? '우리 지도에 저장했어요 ☕' : '수정했어요');
+    setTab('visited');
+    flash(wasWish ? '✓ 다녀온 곳으로 옮겼어요' : isNew ? '우리 지도에 저장했어요 ☕' : '수정했어요');
   };
   const remove = (id) => { setCafes((p) => p.map((c) => (c.id === id ? { id, deleted: true, updatedAt: Date.now() } : c))); markDirty(); setDetailId(null); setSelectedId(null); flash('삭제했어요'); };
   const toggleFilter = (k) => {
@@ -1591,7 +1658,7 @@ function App() {
         </div>
 
         {/* 저장한 곳 필터 */}
-        {!inSearch && (
+        {!inSearch && tab === 'visited' && (
           <div className="flex gap-2 overflow-x-auto no-scrollbar px-4 pb-3">
             {[
               { k: 'pet', l: '반려견 동반만', c: 'bg-sage-500', icon: <Bichon className="h-5 w-5" /> },
@@ -1664,6 +1731,7 @@ function App() {
                 const saved = savedByName[norm(it.name)];
                 return (
                   <SearchResult key={i} item={it} index={i} active={i === activeRes} saved={!!saved}
+                    wished={!!wishByName[norm(it.name)]} onWish={() => toggleWish(it)}
                     onFocus={() => selectResult(i, 'list')}
                     onRecord={() => setEditing({ mode: 'new', prefill: it })}
                     onOpenSaved={() => setDetailId(saved.id)} />
@@ -1676,34 +1744,61 @@ function App() {
           </>
         ) : (
           <>
-            <div className="flex items-baseline justify-between px-5 pb-2">
-              <h2 className="text-[15px] font-extrabold text-ink-900">
-                우리가 다녀온 곳 <span className="text-coral-500">{visible.length}</span>
-                {visible.length !== live.length && <span className="font-semibold text-ink-400"> / {live.length}</span>}
-              </h2>
-              <button onClick={() => setMapOpen((v) => !v)} className="text-[12px] font-bold text-ink-500">{mapOpen ? '지도 접기 ▴' : '지도 펼치기 ▾'}</button>
+            <div className="flex items-center justify-between gap-2 px-4 pb-2">
+              <div className="flex rounded-full bg-white p-1 text-[13px] font-bold ring-1 ring-ink-400/15">
+                <button onClick={() => { vibrate(); setTab('visited'); setSelectedId(null); }} aria-pressed={tab === 'visited'}
+                  className={`rounded-full px-3.5 py-1.5 ${tab === 'visited' ? 'bg-coral-500 text-white' : 'text-ink-500'}`}>
+                  다녀온 곳 {visible.length}{visible.length !== visited.length ? `/${visited.length}` : ''}</button>
+                <button onClick={() => { vibrate(); setTab('wish'); setSelectedId(null); }} aria-pressed={tab === 'wish'}
+                  className={`rounded-full px-3.5 py-1.5 ${tab === 'wish' ? 'bg-pink-500 text-white' : 'text-ink-500'}`}>
+                  ♥ 가고 싶은 곳 {wishes.length}</button>
+              </div>
+              <button onClick={() => setMapOpen((v) => !v)} className="shrink-0 text-[12px] font-bold text-ink-500">{mapOpen ? '지도 접기 ▴' : '지도 ▾'}</button>
             </div>
+            {tab === 'wish' ? (
+            <div className="flex-1 space-y-3 overflow-y-auto no-scrollbar px-4 pb-32">
+              {wishes.map((w) => (
+                <WishCard key={w.id} wish={w} active={w.id === selectedId} onClick={() => selectSaved(w.id, 'list')}
+                  onVisit={() => visitWish(w)} onRemove={() => removeWish(w.id)} />
+              ))}
+              {wishes.length === 0 && (
+                <div className="mt-8 flex flex-col items-center text-center text-ink-500">
+                  <span className="text-5xl text-pink-300">♡</span>
+                  <p className="mt-3 font-bold text-ink-700">아직 가고 싶은 곳이 없어요</p>
+                  <p className="text-sm">위 검색창에서 찾은 뒤 <b className="text-pink-500">♡ 가고 싶어요</b>를 눌러 담아 보세요</p>
+                </div>
+              )}
+            </div>
+            ) : (
             <div className="flex-1 space-y-3 overflow-y-auto no-scrollbar px-4 pb-32">
               {visible.map((c) => <CafeCard key={c.id} cafe={c} active={c.id === selectedId} onClick={() => onCardClick(c.id)} />)}
               {visible.length === 0 && (
                 <div className="mt-8 flex flex-col items-center text-center text-ink-500">
                   <Bichon className="h-16 w-16" />
-                  <p className="mt-3 font-bold text-ink-700">{live.length ? '조건에 맞는 곳이 아직 없어요' : '아직 다녀온 곳이 없어요'}</p>
+                  <p className="mt-3 font-bold text-ink-700">{visited.length ? '조건에 맞는 곳이 아직 없어요' : '아직 다녀온 곳이 없어요'}</p>
                   <p className="text-sm">위 검색창에서 ‘{regionName ? `${regionName} ` : ''}애견동반 카페’처럼 찾아서 기록해 보세요</p>
                 </div>
               )}
               {visible.length > 0 && <p className="pt-2 text-center text-[12px] text-ink-400">카드를 한 번 더 누르면 상세 정보가 열려요</p>}
             </div>
+            )}
           </>
         )}
       </section>
 
       {/* 추가 버튼 */}
       {!inSearch && (
-        <button onClick={() => { vibrate(); setEditing({ mode: 'new' }); }}
-          className="fixed bottom-safe left-1/2 z-30 flex -translate-x-1/2 items-center gap-2 rounded-full bg-coral-500 px-6 py-4 text-[15px] font-extrabold text-white shadow-xl shadow-coral-500/40 active:scale-95">
-          <span className="text-xl leading-none">＋</span> 방문 기록
-        </button>
+        tab === 'wish' ? (
+          <button onClick={() => { vibrate(); const el = document.querySelector('header input[type=search]'); el && el.focus(); }}
+            className="fixed bottom-safe left-1/2 z-30 flex -translate-x-1/2 items-center gap-2 rounded-full bg-pink-500 px-6 py-4 text-[15px] font-extrabold text-white shadow-xl shadow-pink-500/40 active:scale-95">
+            <span className="text-xl leading-none">♡</span> 가고 싶은 곳 찾기
+          </button>
+        ) : (
+          <button onClick={() => { vibrate(); setEditing({ mode: 'new' }); }}
+            className="fixed bottom-safe left-1/2 z-30 flex -translate-x-1/2 items-center gap-2 rounded-full bg-coral-500 px-6 py-4 text-[15px] font-extrabold text-white shadow-xl shadow-coral-500/40 active:scale-95">
+            <span className="text-xl leading-none">＋</span> 방문 기록
+          </button>
+        )
       )}
 
       {toast && (
